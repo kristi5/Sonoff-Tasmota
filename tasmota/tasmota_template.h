@@ -28,7 +28,7 @@ enum UserSelectablePins {
   GPIO_DHT11,          // DHT11
   GPIO_DHT22,          // DHT21, DHT22, AM2301, AM2302, AM2321
   GPIO_SI7021,         // iTead SI7021
-  GPIO_DSB,            // Single wire DS18B20 or DS18S20
+  GPIO_1W,             // 1-wire bus 
   GPIO_I2C_SCL,        // I2C SCL
   GPIO_I2C_SDA,        // I2C SDA
   GPIO_WS2812,         // WS2812 Led string
@@ -227,7 +227,7 @@ enum ProgramSelectablePins {
 const char kSensorNames[] PROGMEM =
   D_SENSOR_NONE "|"
   D_SENSOR_DHT11 "|" D_SENSOR_AM2301 "|" D_SENSOR_SI7021 "|"
-  D_SENSOR_DS18X20 "|"
+  D_SENSOR_1WIRE "|"
   D_SENSOR_I2C_SCL "|" D_SENSOR_I2C_SDA "|"
   D_SENSOR_WS2812 "|"
   D_SENSOR_IRSEND "|"
@@ -550,8 +550,8 @@ const uint8_t kGpioNiceList[] PROGMEM = {
   GPIO_DHT22,          // DHT21, DHT22, AM2301, AM2302, AM2321
   GPIO_SI7021,         // iTead SI7021
 #endif
-#ifdef USE_DS18x20
-  GPIO_DSB,            // Single wire DS18B20 or DS18S20
+#ifdef USE_1WIRE
+  GPIO_1W,             // 1-Wire bus
 #endif
 
 // Light
@@ -1370,8 +1370,8 @@ const mytmplt kModules[MAXMODULE] PROGMEM = {
                        // http://www.wykop.pl/ramka/3325399/diy-supla-do-puszki-instalacyjnej-podtynkowej-supla-org/
      0,                // GPIO00 Flash jumper
      GPIO_USER,        // GPIO01 Serial RXD and Optional sensor
-#ifdef USE_DS18x20
-     GPIO_DSB,         // GPIO02 DS18B20 sensor
+#ifdef USE_1WIRE
+     GPIO_1W,          // GPIO02 DS18B20 sensor on One Wire bus
 #else
      GPIO_USER,        // GPIO02 Optional sensor
 #endif
