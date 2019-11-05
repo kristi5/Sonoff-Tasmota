@@ -483,7 +483,10 @@ void GetFeatures(void)
 #ifdef USE_1WIRE
   feature5 |= 0x00020000;  // xdrv_32_1wire.ino
 #endif
-//  feature5 |= 0x00040000;
+
+#ifdef USE_DS28E17        //xdrv_33_ds28e17.ino
+  feature5 |= 0x00040000;
+#endif
 //  feature5 |= 0x00080000;
 
 //  feature5 |= 0x00100000;

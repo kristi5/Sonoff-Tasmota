@@ -357,6 +357,8 @@
   //  #define ONEWIRE_INTERNAL_PULLUP                // Use INPUT_PULLUP internal pullup resistor
   #define USE_DS18x20                              // Add support for DS18x20 sensors with id sort, single scan and read retry (+2k6 code)
   //  #define W1_PARASITE_POWER                      // Optimize for parasite powered sensors
+  #define USE_DS28E17
+  //#define NO_GLOBAL_TWOWIRE
 #endif //USE_1WIRE
 
 // -- I2C sensors ---------------------------------

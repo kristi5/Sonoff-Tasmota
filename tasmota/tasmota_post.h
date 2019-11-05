@@ -118,6 +118,7 @@ char* ToHex_P(const unsigned char * in, size_t insz, char * out, size_t outsz, c
 #undef USE_ADC_VCC                               // Add Analog input on selected devices
 #define USE_1WIRE                                // Enable One Wire Bus functionality
 #define USE_DS18x20                              // Add support for DS18x20 sensors with id sort, single scan and read retry (+1k3 code)
+#define USE_DS28E17                              // Disable support for DS28E17 1-Wire to I2C Bridge
 
 #define USE_I2C                                  // I2C using library wire (+10k code, 0k2 mem, 124 iram)
 #define USE_SHT                                  // Add I2C emulating code for SHT1X sensor (+1k4 code)
@@ -357,7 +358,8 @@ char* ToHex_P(const unsigned char * in, size_t insz, char * out, size_t outsz, c
   #undef USE_SOLAX_X1                            // Disable support for Solax X1 series Modbus log info (+3k1 code)
 
 #undef USE_1WIRE                                 // Disable One Wire Bus functionality
-#undef USE_DS18x20                               // Disable support for DS18x20 sensors with id sort, single scan and read retry (+1k3 code)
+  #undef USE_DS18x20                             // Disable support for DS18x20 sensors with id sort, single scan and read retry (+1k3 code)
+  #undef USE_DS28E17                             // Disable support for DS28E17 1-Wire to I2C Bridge
 
 #undef USE_I2C                                   // Disable all I2C sensors
 #undef USE_SPI                                   // Disable all SPI devices
@@ -447,6 +449,7 @@ char* ToHex_P(const unsigned char * in, size_t insz, char * out, size_t outsz, c
 #define USE_ADC_VCC                              // Display Vcc in Power status. Disable for use as Analog input on selected devices
 #undef USE_1WIRE                                 // Disable One Wire Bus functionality
 #undef USE_DS18x20                               // Disable DS18x20 sensor
+#undef USE_DS28E17                               // Disable support for DS28E17 1-Wire to I2C Bridge
 #undef USE_I2C                                   // Disable all I2C sensors and devices
 #undef USE_SPI                                   // Disable all SPI devices
 #undef USE_DISPLAY                               // Disable Display support
@@ -547,7 +550,7 @@ char* ToHex_P(const unsigned char * in, size_t insz, char * out, size_t outsz, c
 #define USE_ADC_VCC                              // Display Vcc in Power status. Disable for use as Analog input on selected devices
 #undef USE_1WIRE                                 // Disable One Wire Bus functionality
 #undef USE_DS18x20                               // Disable DS18x20 sensor
-
+#undef USE_DS28E17                               // Disable support for DS28E17 1-Wire to I2C Bridge
 #undef USE_I2C                                   // Disable all I2C sensors and devices
 #undef USE_SPI                                   // Disable all SPI devices
 #undef USE_DISPLAY                               // Disable Display support
