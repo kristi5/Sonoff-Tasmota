@@ -94,21 +94,27 @@ uint16_t Sr04TMiddleValue(uint16_t first, uint16_t second, uint16_t third)
 }
 
 uint16_t Sr04TMode3Distance() {
+  
     sonar_serial->write(0x55);
+    sonar_serial->flush();
+
     return Sr04TMode2Distance();
 }
 
 uint16_t Sr04TMode2Distance(void) 
 { 
-  sonar_serial->setTimeout(200);
+  sonar_serial->setTimeout(300);
+  const char startByte = 0xff;
   
-  //wait for starting byte
-  if (!sonar_serial->find(255)) {
+  if (!sonar_serial->find(startByte)) {
+      //DEBUG_SENSOR_LOG(PSTR("SR04: No start byte"));
       return NO_ECHO;
   }  
+  
   delay(5);
-  //read high byte
+
   uint8_t crc = sonar_serial->read();
+  //read high byte
   uint16_t distance = ((uint16_t)crc) << 8;  
 
   //read low byte  
@@ -118,10 +124,10 @@ uint16_t Sr04TMode2Distance(void)
 
   //check crc sum
   if (crc != sonar_serial->read()) {
-    DEBUG_SENSOR_LOG(PSTR("SR04: Bad CRC."));
+    AddLog_P2(LOG_LEVEL_ERROR,PSTR("SR04: Reading CRC error."));
     return NO_ECHO;
   }  
-  DEBUG_SENSOR_LOG(PSTR("SR04: Distance: %d"), distance);
+  //DEBUG_SENSOR_LOG(PSTR("SR04: Distance: %d"), distance);
   return distance;  
 }
 
@@ -133,7 +139,8 @@ void Sr04TReading(void) {
 
   switch (sr04_type) {
       case 3:
-        distance = (real64_t)(Sr04TMiddleValue(Sr04TMode3Distance(),Sr04TMode3Distance(),Sr04TMode3Distance()))/ 10; //convert to cm
+        distance = (real64_t)(Sr04TMiddleValue(Sr04TMode3Distance(),Sr04TMode3Distance(),Sr04TMode3Distance()))/ 10; //convert to cm        
+        break;
       case 2:
         //empty input buffer first
         while(sonar_serial->available()) sonar_serial->read();
