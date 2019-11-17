@@ -40,9 +40,13 @@
  * !! The I2C-soil-moisture-sensor is the preferred one !!
  *
  * I2C Address: 0x20 - standard address, is changeable
+ * - Uses I2C clock stretching
+ * - Scans all I2C addresses
 \*********************************************************************************************/
 
 #define XSNS_48                       48
+#define XI2C_33                       33  // See I2CDEVICES.md
+
 #define CHIRP_MAX_SENSOR_COUNT        3            // 127 is expectectd to be the max number
 
 #define CHIRP_ADDR_STANDARD           0x20         // standard address
@@ -222,36 +226,35 @@ bool ChirpSet(uint8_t addr) {
 
 /********************************************************************************************/
 
-bool ChirpScan() {
-    ChirpClockSet();
-    chirp_found_sensors = 0;
-    for (uint8_t address = 1; address <= 127; address++) {
-      chirp_sensor[chirp_found_sensors].version = 0;
-      chirp_sensor[chirp_found_sensors].version = ChirpReadVersion(address);
-      delay(2);
-      chirp_sensor[chirp_found_sensors].version = ChirpReadVersion(address);
-      if(chirp_sensor[chirp_found_sensors].version > 0) {
-        AddLog_P2(LOG_LEVEL_DEBUG, S_LOG_I2C_FOUND_AT, "CHIRP:", address);
-        if(chirp_found_sensors<CHIRP_MAX_SENSOR_COUNT){
-          chirp_sensor[chirp_found_sensors].address = address; // push next sensor, as long as there is space in the array
-          AddLog_P2(LOG_LEVEL_DEBUG, PSTR("CHIRP: fw %x"), chirp_sensor[chirp_found_sensors].version);
-        }
-        chirp_found_sensors++;
+bool ChirpScan()
+{
+  ChirpClockSet();
+  chirp_found_sensors = 0;
+  for (uint8_t address = 1; address <= 127; address++) {
+    chirp_sensor[chirp_found_sensors].version = 0;
+    chirp_sensor[chirp_found_sensors].version = ChirpReadVersion(address);
+    delay(2);
+    chirp_sensor[chirp_found_sensors].version = ChirpReadVersion(address);
+    if (chirp_sensor[chirp_found_sensors].version > 0) {
+      I2cSetActiveFound(address, "CHIRP");
+      if (chirp_found_sensors<CHIRP_MAX_SENSOR_COUNT) {
+        chirp_sensor[chirp_found_sensors].address = address; // push next sensor, as long as there is space in the array
+        AddLog_P2(LOG_LEVEL_DEBUG, PSTR("CHIRP: fw %x"), chirp_sensor[chirp_found_sensors].version);
       }
+      chirp_found_sensors++;
     }
-    // chirp_timeout_count = 11; // wait a second to read the real fw-version in the next step
-    AddLog_P2(LOG_LEVEL_DEBUG, PSTR("Found %u CHIRP sensor(s)."), chirp_found_sensors);
-    if (chirp_found_sensors == 0) {return false;}
-    else {return true;}
+  }
+  // chirp_timeout_count = 11; // wait a second to read the real fw-version in the next step
+  AddLog_P2(LOG_LEVEL_DEBUG, PSTR("Found %u CHIRP sensor(s)."), chirp_found_sensors);
+  return (chirp_found_sensors > 0);
 }
 
 /********************************************************************************************/
 
 void ChirpDetect(void)
 {
-  if (chirp_next_job > 0) {
-    return;
-  }
+  if (chirp_next_job > 0) { return; }
+
   DEBUG_SENSOR_LOG(PSTR("CHIRP: scan will start ..."));
   if (ChirpScan()) {
     uint8_t chirp_model = 0;  // TODO: ??
@@ -521,31 +524,31 @@ bool ChirpCmd(void) {
 
 bool Xsns48(uint8_t function)
 {
+  if (!I2cEnabled(XI2C_33)) { return false; }
+
   bool result = false;
 
-  if (i2c_flg) {
-    switch (function) {
-      case FUNC_INIT:
-        ChirpDetect();         // We can call CHIRPSCAN later to re-detect
-        break;
-      case FUNC_EVERY_100_MSECOND:
-        if(chirp_found_sensors > 0){
-          ChirpEvery100MSecond();
-        }
-        break;
-      case FUNC_COMMAND:
-        result = ChirpCmd();
-        break;
-      case FUNC_JSON_APPEND:
-        ChirpShow(1);
-        chirp_next_job = 14; // TELE done, now compute time for next measure cycle
-        break;
+  switch (function) {
+    case FUNC_EVERY_100_MSECOND:
+      if(chirp_found_sensors > 0){
+        ChirpEvery100MSecond();
+      }
+      break;
+    case FUNC_COMMAND:
+      result = ChirpCmd();
+      break;
+    case FUNC_JSON_APPEND:
+      ChirpShow(1);
+      chirp_next_job = 14; // TELE done, now compute time for next measure cycle
+      break;
 #ifdef USE_WEBSERVER
-      case FUNC_WEB_SENSOR:
-        ChirpShow(0);
-        break;
+    case FUNC_WEB_SENSOR:
+      ChirpShow(0);
+      break;
 #endif  // USE_WEBSERVER
-    }
+    case FUNC_INIT:
+      ChirpDetect();         // We can call CHIRPSCAN later to re-detect
+      break;
   }
   return result;
 }

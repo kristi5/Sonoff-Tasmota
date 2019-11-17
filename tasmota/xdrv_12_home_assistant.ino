@@ -34,18 +34,23 @@ const char HASS_DISCOVER_RELAY[] PROGMEM =
 
 const char HASS_DISCOVER_BUTTON_SWITCH[] PROGMEM =
   "{\"name\":\"%s\","                              // dualr2 1 BTN
-  "\"stat_t\":\"%s\","                             // stat/RESULT/ (implies "\"optimistic\":\"false\",")
-  "\"value_template\":\"{{value_json.%s}}\","      // BUTTON1
-  "\"pl_on\":\"%s\","                              // ON
+  "\"stat_t\":\"%s\","                             // dualr2/stat/BUTTON1/ (implies "\"optimistic\":\"false\",")
   "\"avty_t\":\"%s\","                             // tele/dualr2/LWT
   "\"pl_avail\":\"" D_ONLINE "\","                 // Online
   "\"pl_not_avail\":\"" D_OFFLINE "\"";            // Offline
 
-const char HASS_DISCOVER_BUTTON_SWITCH_TOGGLE[] PROGMEM =
-  ",\"off_delay\":1";                              // Hass has no support for TOGGLE, fake it by resetting to OFF after 1s
+const char HASS_DISCOVER_BUTTON_TOGGLE[] PROGMEM =
+  ",\"value_template\":\"{{value_json.%s}}\","      // STATE
+  "\"pl_on\":\"%s\","                              // TOGGLE
+  "\"off_delay\":1";                              // Hass has no support for TOGGLE, fake it by resetting to OFF after 1s
 
+const char HASS_DISCOVER_SWITCH_TOGGLE[] PROGMEM =
+  ",\"value_template\":\"{%%if is_state(entity_id,\\\"on\\\")-%%}OFF{%%-else-%%}ON{%%-endif%%}\"";      // A switch must maintain his state until the next update
+ 
 const char HASS_DISCOVER_BUTTON_SWITCH_ONOFF[] PROGMEM =
-  ",\"frc_upd\":true,"                             // In ON/OFF case, enable force_update to make automations work
+  ",\"value_template\":\"{{value_json.%s}}\","      // STATE
+  "\"frc_upd\":true,"                             // In ON/OFF case, enable force_update to make automations work
+  "\"pl_on\":\"%s\","                              // ON
   "\"pl_off\":\"%s\"";                             // OFF
 
 const char HASS_DISCOVER_LIGHT_DIMMER[] PROGMEM =
@@ -96,7 +101,7 @@ const char HASS_DISCOVER_SENSOR_HUM[] PROGMEM =
 
 const char HASS_DISCOVER_SENSOR_PRESS[] PROGMEM =
   ",\"unit_of_meas\":\"%s\","                         // PressureUnit() setting
-  "\"val_tpl\":\"{{value_json['%s'].Pressure}}\","    // "BME280":{"Temperature":19.7,"Humidity":27.8,"Pressure":990.1} -> {{ value_json['BME280'].Pressure }}
+  "\"val_tpl\":\"{{value_json['%s'].%s}}\","          // "BME280":{"Temperature":19.7,"Humidity":27.8,"Pressure":990.1} -> {{ value_json['BME280'].Pressure }}
   "\"dev_cla\":\"pressure\"";                         // pressure
 
 //ENERGY
@@ -210,7 +215,7 @@ void HAssAnnounceRelayLight(void)
 
   for (uint32_t i = 1; i <= MAX_RELAYS; i++) {
     is_light = ((i == devices_present) && (light_type));
-    is_topic_light = Settings.flag.hass_light || is_light;
+    is_topic_light = Settings.flag.hass_light || is_light;  // SetOption30 - Enforce HAss autodiscovery as light
 
     mqtt_data[0] = '\0';  // Clear retained message
 
@@ -224,7 +229,7 @@ void HAssAnnounceRelayLight(void)
     snprintf_P(stopic, sizeof(stopic), PSTR(HOME_ASSISTANT_DISCOVERY_PREFIX "/%s/%s/config"),
                (is_topic_light) ? "light" : "switch", unique_id);
 
-    if (Settings.flag.hass_discovery && (i <= devices_present)) {
+    if (Settings.flag.hass_discovery && (i <= devices_present)) {  // SetOption19 - Control Home Assistantautomatic discovery (See SetOption59)
       char name[33+2]; // friendlyname(33) + " " + index
       char value_template[33];
       char prefix[TOPSZ];
@@ -237,7 +242,7 @@ void HAssAnnounceRelayLight(void)
       } else {
         snprintf_P(name, sizeof(name), Settings.friendlyname[i -1]);
       }
-      GetPowerDevice(value_template, i, sizeof(value_template), Settings.flag.device_index_enable);
+      GetPowerDevice(value_template, i, sizeof(value_template), Settings.flag.device_index_enable);  // SetOption26 - Switch between POWER or POWER1
       GetTopic_P(command_topic, CMND, mqtt_topic, value_template);
       //GetTopic_P(state_topic, STAT, mqtt_topic, S_RSLT_RESULT);
       GetTopic_P(state_topic, TELE, mqtt_topic, D_RSLT_STATE);
@@ -257,7 +262,7 @@ void HAssAnnounceRelayLight(void)
 
         GetTopic_P(brightness_command_topic, CMND, mqtt_topic, D_CMND_DIMMER);
         Shorten(&brightness_command_topic, prefix);
-        strncpy_P(stemp3, Settings.flag.not_power_linked?PSTR("last"):PSTR("brightness"), sizeof(stemp3));
+        strncpy_P(stemp3, Settings.flag.not_power_linked?PSTR("last"):PSTR("brightness"), sizeof(stemp3));  // SetOption20 - Control power in relation to Dimmer/Color/Ct changes
         TryResponseAppend_P(HASS_DISCOVER_LIGHT_DIMMER, brightness_command_topic, state_topic, stemp3);
 
         if (Light.subtype >= LST_RGB) {
@@ -310,7 +315,7 @@ void HAssAnnounceButtonSwitch(uint8_t device, char* topic, uint8_t present, uint
   snprintf_P(unique_id, sizeof(unique_id), PSTR("%06X_%s_%d"), ESP.getChipId(), key?"SW":"BTN", device+1);
   snprintf_P(stopic, sizeof(stopic), PSTR(HOME_ASSISTANT_DISCOVERY_PREFIX "/binary_sensor/%s/config"), unique_id);
 
-  if (Settings.flag.hass_discovery && present) {
+  if (Settings.flag.hass_discovery && present) {  // SetOption19 - Control Home Assistantautomatic discovery (See SetOption59)
     char name[33+6]; // friendlyname(33) + " " + "BTN" + " " + index
     char value_template[33];
     char prefix[TOPSZ];
@@ -319,21 +324,25 @@ void HAssAnnounceButtonSwitch(uint8_t device, char* topic, uint8_t present, uint
     char jsoname[8];
 
     snprintf_P(name, sizeof(name), PSTR("%s %s%d"), Settings.friendlyname[0], key?"Switch":"Button", device+1);
+    snprintf_P(jsoname, sizeof(jsoname), PSTR("%s%d"), key?"SWITCH":"BUTTON", device+1);
     GetPowerDevice(value_template, device+1, sizeof(value_template),
-                   key + Settings.flag.device_index_enable); // Force index for Switch 1, Index on Button1 is controlled by Settings.flag.device_index_enable
+                   key + Settings.flag.device_index_enable); // Force index for Switch 1, Index on Button1 is controlled by SetOption26 - Switch between POWER or POWER1
     //GetTopic_P(state_topic, CMND, topic, value_template); // State of button is sent as CMND TOGGLE, state of switch is sent as ON/OFF
-    GetTopic_P(state_topic, STAT, mqtt_topic, PSTR(D_RSLT_RESULT));
+    GetTopic_P(state_topic, STAT, mqtt_topic, (PSTR("/'%s'"), jsoname));
     GetTopic_P(availability_topic, TELE, mqtt_topic, S_LWT);
     FindPrefix(state_topic, availability_topic, prefix);
 
     Shorten(&state_topic, prefix);
     Shorten(&availability_topic, prefix);
-    snprintf_P(jsoname, sizeof(jsoname), PSTR("%s%d"), key?"SWITCH":"BUTTON", device+1);
-    Response_P(HASS_DISCOVER_BUTTON_SWITCH, name, state_topic, jsoname, Settings.state_text[toggle?2:1], availability_topic);
+    Response_P(HASS_DISCOVER_BUTTON_SWITCH, name, state_topic, availability_topic);
     TryResponseAppend_P(HASS_DISCOVER_DEVICE_INFO_SHORT, unique_id, ESP.getChipId(), WiFi.macAddress().c_str());
     if (strlen(prefix) > 0 ) TryResponseAppend_P(HASS_DISCOVER_TOPIC_PREFIX, prefix);
-    if (toggle) TryResponseAppend_P(HASS_DISCOVER_BUTTON_SWITCH_TOGGLE);
-    else TryResponseAppend_P(HASS_DISCOVER_BUTTON_SWITCH_ONOFF, Settings.state_text[0]);
+    if (toggle) {
+      if (!key) { 
+        TryResponseAppend_P(HASS_DISCOVER_BUTTON_TOGGLE, PSTR(D_RSLT_STATE), Settings.state_text[toggle?2:1]);
+      } else {TryResponseAppend_P(HASS_DISCOVER_SWITCH_TOGGLE);}
+    }
+    else TryResponseAppend_P(HASS_DISCOVER_BUTTON_SWITCH_ONOFF, PSTR(D_RSLT_STATE), Settings.state_text[toggle?2:1], Settings.state_text[0]);
 
     TryResponseAppend_P(PSTR("}"));
   }
@@ -358,7 +367,7 @@ void HAssAnnounceSwitches(void)
 
       // Check if MQTT message will be ON/OFF or TOGGLE
       if (Settings.switchmode[switch_index] == FOLLOW || Settings.switchmode[switch_index] == FOLLOW_INV ||
-          Settings.flag3.button_switch_force_local ||
+          Settings.flag3.button_switch_force_local ||   // SetOption61 - Force local operation when button/switch topic is set
           !strcmp(mqtt_topic, sw_topic) || !strcmp(Settings.mqtt_grptopic, sw_topic))
       {
         toggle = 0; // MQTT message will be ON/OFF
@@ -390,7 +399,7 @@ void HAssAnnounceButtons(void)
       }
 
       // Check if MQTT message will be ON/OFF or TOGGLE
-      if (Settings.flag3.button_switch_force_local ||
+      if (Settings.flag3.button_switch_force_local ||  // SetOption61 - Force local operation when button/switch topic is set
           !strcmp(mqtt_topic, key_topic) || !strcmp(Settings.mqtt_grptopic, key_topic))
       {
         toggle = 0; // MQTT message will be ON/OFF
@@ -420,7 +429,7 @@ void HAssAnnounceSensor(const char* sensorname, const char* subsensortype)
   } else {
     snprintf_P(stopic, sizeof(stopic), PSTR(HOME_ASSISTANT_DISCOVERY_PREFIX "/sensor/%s/config"), unique_id);
   }
-  if (Settings.flag.hass_discovery) {
+  if (Settings.flag.hass_discovery) {  // SetOption19 - Control Home Assistantautomatic discovery (See SetOption59)
     char name[33+42]; // friendlyname(33) + " " + sensorname(20?) + " " + sensortype(20?)
     char prefix[TOPSZ];
     char *state_topic = stemp1;
@@ -448,8 +457,9 @@ void HAssAnnounceSensor(const char* sensorname, const char* subsensortype)
       TryResponseAppend_P(HASS_DISCOVER_SENSOR_TEMP, TempUnit(), sensorname);
     } else if (!strcmp_P(subsensortype, PSTR(D_JSON_HUMIDITY))) {
       TryResponseAppend_P(HASS_DISCOVER_SENSOR_HUM, sensorname);
-    } else if (!strcmp_P(subsensortype, PSTR(D_JSON_PRESSURE))) {
-      TryResponseAppend_P(HASS_DISCOVER_SENSOR_PRESS, PressureUnit().c_str(), sensorname);
+    } else if (!strcmp_P(subsensortype, PSTR(D_JSON_PRESSURE)) 
+               || !strcmp_P(subsensortype, PSTR(D_JSON_PRESSUREATSEALEVEL))){
+      TryResponseAppend_P(HASS_DISCOVER_SENSOR_PRESS, PressureUnit().c_str(), sensorname, subsensortype);
     } else if (!strcmp_P(subsensortype, PSTR(D_JSON_TOTAL))
                || !strcmp_P(subsensortype, PSTR(D_JSON_TODAY))
                || !strcmp_P(subsensortype, PSTR(D_JSON_YESTERDAY))){
@@ -531,7 +541,7 @@ void HAssAnnounceStatusSensor(void)
   snprintf_P(unique_id, sizeof(unique_id), PSTR("%06X_status"), ESP.getChipId());
   snprintf_P(stopic, sizeof(stopic), PSTR(HOME_ASSISTANT_DISCOVERY_PREFIX "/sensor/%s/config"), unique_id);
 
-  if (Settings.flag.hass_discovery) {
+  if (Settings.flag.hass_discovery) {  // SetOption19 - Control Home Assistantautomatic discovery (See SetOption59)
     char name[33+7]; // friendlyname(33) + " " + "status"
     char prefix[TOPSZ];
     char *state_topic = stemp1;
@@ -572,10 +582,10 @@ void HAssPublishStatus(void)
 void HAssDiscovery(void)
 {
   // Configure Tasmota for default Home Assistant parameters to keep discovery message as short as possible
-  if (Settings.flag.hass_discovery) {
-    Settings.flag.mqtt_response = 0;         // Response always as RESULT and not as uppercase command
-    Settings.flag.decimal_text = 1;          // Respond with decimal color values
-    Settings.flag3.hass_tele_on_power = 1;   // send tele/STATE message as stat/RESULT
+  if (Settings.flag.hass_discovery) {        // SetOption19 - Control Home Assistantautomatic discovery (See SetOption59)
+    Settings.flag.mqtt_response = 0;         // SetOption4  - Switch between MQTT RESULT or COMMAND - Response always as RESULT and not as uppercase command
+    Settings.flag.decimal_text = 1;          // SetOption17 - Switch between decimal or hexadecimal output - Respond with decimal color values
+    Settings.flag3.hass_tele_on_power = 1;   // SetOption59 - Send tele/%topic%/STATE in addition to stat/%topic%/RESULT - send tele/STATE message as stat/RESULT
 //    Settings.light_scheme = 0;             // To just control color it needs to be Scheme 0
     if (strcmp_P(Settings.mqtt_fulltopic, PSTR("%topic%/%prefix%/"))) {
       strncpy_P(Settings.mqtt_fulltopic, PSTR("%topic%/%prefix%/"), sizeof(Settings.mqtt_fulltopic));
@@ -584,7 +594,7 @@ void HAssDiscovery(void)
     }
   }
 
-  if (Settings.flag.hass_discovery || (1 == hass_mode)) {
+  if (Settings.flag.hass_discovery || (1 == hass_mode)) {  // SetOption19 - Control Home Assistantautomatic discovery (See SetOption59)
     // Send info about relays and lights
     HAssAnnounceRelayLight();
 
@@ -610,7 +620,7 @@ void HAssDiscover(void)
 
 void HAssAnyKey(void)
 {
-  if (!Settings.flag.hass_discovery) { return; }
+  if (!Settings.flag.hass_discovery) { return; }  // SetOption19 - Control Home Assistantautomatic discovery (See SetOption59)
 
   uint32_t key = (XdrvMailbox.payload >> 16) & 0xFF;
   uint32_t device = XdrvMailbox.payload & 0xFF;
@@ -619,8 +629,10 @@ void HAssAnyKey(void)
   char scommand[CMDSZ];
   snprintf_P(scommand, sizeof(scommand), PSTR("%s%d"), (key) ? "SWITCH" : "BUTTON", device);
   char stopic[TOPSZ];
-  GetTopic_P(stopic, STAT, mqtt_topic, (Settings.flag.mqtt_response) ? scommand : S_RSLT_RESULT);
-  Response_P(S_JSON_COMMAND_SVALUE, scommand, GetStateText(state));
+  //GetTopic_P(stopic, STAT, mqtt_topic, (Settings.flag.mqtt_response) ? scommand : S_RSLT_RESULT);  // SetOption4 - Switch between MQTT RESULT or COMMAND
+  //Response_P(S_JSON_COMMAND_SVALUE, scommand, GetStateText(state));
+  GetTopic_P(stopic, STAT, mqtt_topic, scommand);
+  Response_P(S_JSON_COMMAND_SVALUE, PSTR(D_RSLT_STATE), GetStateText(state));
   MqttPublish(stopic);
 }
 
@@ -632,7 +644,7 @@ bool Xdrv12(uint8_t function)
 {
   bool result = false;
 
-  if (Settings.flag.mqtt_enabled) {
+  if (Settings.flag.mqtt_enabled) {          // SetOption3 - Enable MQTT
     switch (function) {
       case FUNC_EVERY_SECOND:
         if (hass_init_step) {
@@ -640,7 +652,7 @@ bool Xdrv12(uint8_t function)
           if (!hass_init_step) {
             HAssDiscovery();                 // Scheduled discovery using available resources
           }
-        } else if (Settings.flag.hass_discovery && Settings.tele_period) {
+        } else if (Settings.flag.hass_discovery && Settings.tele_period) {  // SetOption19 - Control Home Assistantautomatic discovery (See SetOption59)
           hass_tele_period++;
           if (hass_tele_period >= Settings.tele_period) {
             hass_tele_period = 0;

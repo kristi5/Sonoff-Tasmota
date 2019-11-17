@@ -28,6 +28,7 @@
 \*********************************************************************************************/
 
 #define XSNS_16             16
+#define XI2C_16             16  // See I2CDEVICES.md
 
 #include <Tsl2561Util.h>
 
@@ -63,32 +64,23 @@ bool Tsl2561Read(void)
 
 void Tsl2561Detect(void)
 {
-  if (tsl2561_type) { return; }
-  uint8_t id;
-
-  if (I2cDevice(0x29) || I2cDevice(0x39) || I2cDevice(0x49)) {
+  if (I2cSetDevice(0x29) || I2cSetDevice(0x39) || I2cSetDevice(0x49)) {
+    uint8_t id;
     Tsl.begin();
     if (!Tsl.id(id)) return;
     if (Tsl.on()) {
       tsl2561_type = 1;
-      AddLog_P2(LOG_LEVEL_DEBUG, S_LOG_I2C_FOUND_AT, tsl2561_types, Tsl.address(), id);
+      I2cSetActiveFound(Tsl.address(), tsl2561_types);
     }
   }
 }
 
 void Tsl2561EverySecond(void)
 {
-  if (90 == (uptime %100)) {
-    // 1mS
-    Tsl2561Detect();
-  }
-  else if (!(uptime %2)) {  // Update every 2 seconds
+  if (!(uptime %2)) {  // Every 2 seconds
     // ?mS - 4Sec
-    if (tsl2561_type) {
-      if (!Tsl2561Read()) {
-        AddLogMissed(tsl2561_types, tsl2561_valid);
-               if (!tsl2561_valid) { tsl2561_type = 0; }
-      }
+    if (!Tsl2561Read()) {
+      AddLogMissed(tsl2561_types, tsl2561_valid);
     }
   }
 }
@@ -121,13 +113,15 @@ void Tsl2561Show(bool json)
 
 bool Xsns16(uint8_t function)
 {
+  if (!I2cEnabled(XI2C_16)) { return false; }
+
   bool result = false;
 
-  if (i2c_flg) {
+  if (FUNC_INIT == function) {
+    Tsl2561Detect();
+  }
+  else if (tsl2561_type) {
     switch (function) {
-      case FUNC_INIT:
-        Tsl2561Detect();
-        break;
       case FUNC_EVERY_SECOND:
         Tsl2561EverySecond();
         break;

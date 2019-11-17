@@ -108,6 +108,29 @@ void WifiConfig(uint8_t type)
   }
 }
 
+void WifiSetMode(WiFiMode_t wifi_mode)
+{
+  if (WiFi.getMode() == wifi_mode) { return; }
+
+  if (wifi_mode != WIFI_OFF) {
+    // See: https://github.com/esp8266/Arduino/issues/6172#issuecomment-500457407
+    WiFi.forceSleepWake(); // Make sure WiFi is really active.
+    delay(100);
+  }
+
+  if (!WiFi.mode(wifi_mode)) {
+    AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_WIFI "Cannot set Mode"));
+  }
+
+  if (wifi_mode == WIFI_OFF) {
+    delay(1000);
+    WiFi.forceSleepBegin();
+    delay(1);
+  } else {
+    delay(30); // Must allow for some time to init.
+  }
+}
+
 void WiFiSetSleepMode(void)
 {
 /* Excerpt from the esp8266 non os sdk api reference (v2.2.1):
@@ -125,12 +148,13 @@ void WiFiSetSleepMode(void)
 // Sleep explanation: https://github.com/esp8266/Arduino/blob/3f0c601cfe81439ce17e9bd5d28994a7ed144482/libraries/ESP8266WiFi/src/ESP8266WiFiGeneric.cpp#L255
 #if defined(ARDUINO_ESP8266_RELEASE_2_4_1) || defined(ARDUINO_ESP8266_RELEASE_2_4_2)
 #else  // Enabled in 2.3.0, 2.4.0 and stage
-  if (sleep && Settings.flag3.sleep_normal) {
-    WiFi.setSleepMode(WIFI_LIGHT_SLEEP);  // Allow light sleep during idle times
+  if (sleep && Settings.flag3.sleep_normal) {  // SetOption60 - Enable normal sleep instead of dynamic sleep
+    WiFi.setSleepMode(WIFI_LIGHT_SLEEP);       // Allow light sleep during idle times
   } else {
-    WiFi.setSleepMode(WIFI_MODEM_SLEEP);  // Disable sleep (Esp8288/Arduino core and sdk default)
+    WiFi.setSleepMode(WIFI_MODEM_SLEEP);       // Disable sleep (Esp8288/Arduino core and sdk default)
   }
 #endif
+  WifiSetOutputPower();
 }
 
 void WifiBegin(uint8_t flag, uint8_t channel)
@@ -143,13 +167,15 @@ void WifiBegin(uint8_t flag, uint8_t channel)
 
 #ifdef ARDUINO_ESP8266_RELEASE_2_3_0  // (!strncmp_P(ESP.getSdkVersion(),PSTR("1.5.3"),5))
   AddLog_P(LOG_LEVEL_DEBUG, S_LOG_WIFI, PSTR(D_PATCH_ISSUE_2186));
-  WiFi.mode(WIFI_OFF);      // See https://github.com/esp8266/Arduino/issues/2186
+//  WiFi.mode(WIFI_OFF);      // See https://github.com/esp8266/Arduino/issues/2186
+  WifiSetMode(WIFI_OFF);
 #endif
 
   WiFi.persistent(false);   // Solve possible wifi init errors (re-add at 6.2.1.16 #4044, #4083)
   WiFi.disconnect(true);    // Delete SDK wifi config
   delay(200);
-  WiFi.mode(WIFI_STA);      // Disable AP mode
+//  WiFi.mode(WIFI_STA);      // Disable AP mode
+  WifiSetMode(WIFI_STA);
   WiFiSetSleepMode();
 //  if (WiFi.getPhyMode() != WIFI_PHY_MODE_11N) { WiFi.setPhyMode(WIFI_PHY_MODE_11N); }  // B/G/N
 //  if (WiFi.getPhyMode() != WIFI_PHY_MODE_11G) { WiFi.setPhyMode(WIFI_PHY_MODE_11G); }  // B/G
@@ -407,7 +433,7 @@ void WifiCheckIp(void)
         }
     }
     if (Wifi.retry) {
-      if (Settings.flag3.use_wifi_scan) {
+      if (Settings.flag3.use_wifi_scan) {  // SetOption56 - Scan wifi network at restart for configured AP's
         if (Wifi.retry_init == Wifi.retry) {
           Wifi.scan_state = 1;    // Select scanned SSID
         }
@@ -472,7 +498,7 @@ void WifiCheck(uint8_t param)
 #endif  // LWIP_IPV6=1
         WifiSetState(1);
 
-        if (Settings.flag3.use_wifi_rescan) {
+        if (Settings.flag3.use_wifi_rescan) {  // SetOption57 - Scan wifi network every 44 minutes for configured AP's
           if (!(uptime % (60 * WIFI_RESCAN_MINUTES))) {
             Wifi.scan_state = 2;
           }
@@ -486,7 +512,7 @@ void WifiCheck(uint8_t param)
 #endif  // FIRMWARE_MINIMAL
 
 #ifdef USE_DISCOVERY
-        if (Settings.flag3.mdns_enabled) {
+        if (Settings.flag3.mdns_enabled) {  // SetOption55 - Control mDNS service
           if (!Wifi.mdns_begun) {
 //            if (mdns_delayed_start) {
 //              AddLog_P(LOG_LEVEL_INFO, PSTR(D_LOG_MDNS D_ATTEMPTING_CONNECTION));
@@ -520,7 +546,7 @@ void WifiCheck(uint8_t param)
 #endif  // USE_WEBSERVER
 
 #ifdef USE_KNX
-        if (!knx_started && Settings.flag.knx_enabled) {
+        if (!knx_started && Settings.flag.knx_enabled) {  // CMND_KNX_ENABLED
           KNXStart();
           knx_started = true;
         }
@@ -549,9 +575,15 @@ int WifiState(void)
   return state;
 }
 
+void WifiSetOutputPower(void)
+{
+  WiFi.setOutputPower((float)(Settings.wifi_output_power) / 10);
+}
+
 void WifiConnect(void)
 {
   WifiSetState(0);
+  WifiSetOutputPower();
   WiFi.persistent(false);     // Solve possible wifi init errors
   Wifi.status = 0;
   Wifi.retry_init = WIFI_RETRY_OFFSET_SEC + ((ESP.getChipId() & 0xF) * 2);
@@ -571,11 +603,19 @@ void WifiDisconnect(void)
   WiFi.persistent(false);     // Do not use SDK storage of SSID/WPA parameters
 }
 
-void EspRestart(void)
+void WifiShutdown(void)
 {
   delay(100);                 // Allow time for message xfer - disabled v6.1.0b
-  if (Settings.flag.mqtt_enabled) MqttDisconnect();
+  if (Settings.flag.mqtt_enabled) {  // SetOption3 - Enable MQTT
+    MqttDisconnect();
+  }
   WifiDisconnect();
+}
+
+void EspRestart(void)
+{
+  WifiShutdown();
+  RtcRebootReset();
 //  ESP.restart();            // This results in exception 3 on restarts on core 2.3.0
   ESP.reset();
 }

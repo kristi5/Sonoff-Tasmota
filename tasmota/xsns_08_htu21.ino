@@ -28,6 +28,7 @@
 \*********************************************************************************************/
 
 #define XSNS_08             8
+#define XI2C_09             9       // See I2CDEVICES.md
 
 #define HTU21_ADDR          0x40
 
@@ -196,9 +197,9 @@ bool HtuRead(void)
 
 void HtuDetect(void)
 {
-  if (htu_type) { return; }
-
   htu_address = HTU21_ADDR;
+  if (I2cActive(htu_address)) { return; }
+
   htu_type = HtuReadDeviceId();
   if (htu_type) {
     uint8_t index = 0;
@@ -223,23 +224,16 @@ void HtuDetect(void)
         htu_delay_humidity = 23;
     }
     GetTextIndexed(htu_types, sizeof(htu_types), index, kHtuTypes);
-    AddLog_P2(LOG_LEVEL_DEBUG, S_LOG_I2C_FOUND_AT, htu_types, htu_address);
+    I2cSetActiveFound(htu_address, htu_types);
   }
 }
 
 void HtuEverySecond(void)
 {
-  if (92 == (uptime %100)) {
-    // 1mS
-    HtuDetect();
-  }
-  else if (uptime &1) {
+  if (uptime &1) {  // Every 2 seconds
     // HTU21: 68mS, SI70xx: 37mS
-    if (htu_type) {
-      if (!HtuRead()) {
-        AddLogMissed(htu_types, htu_valid);
-//        if (!htu_valid) { htu_type = 0; }
-      }
+    if (!HtuRead()) {
+      AddLogMissed(htu_types, htu_valid);
     }
   }
 }
@@ -280,13 +274,15 @@ void HtuShow(bool json)
 
 bool Xsns08(uint8_t function)
 {
+  if (!I2cEnabled(XI2C_09)) { return false; }
+
   bool result = false;
 
-  if (i2c_flg) {
+  if (FUNC_INIT == function) {
+    HtuDetect();
+  }
+  else if (htu_type) {
     switch (function) {
-      case FUNC_INIT:
-        HtuDetect();
-        break;
       case FUNC_EVERY_SECOND:
         HtuEverySecond();
         break;

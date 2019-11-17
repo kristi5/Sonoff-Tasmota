@@ -29,6 +29,7 @@
 \*********************************************************************************************/
 
 #define XSNS_07             7
+#define XI2C_08             8  // See I2CDEVICES.md
 
 enum {
   SHT1X_CMD_MEASURE_TEMP  = B00000011,
@@ -84,7 +85,7 @@ bool ShtSendCommand(const uint8_t cmd)
     ackerror = true;
   }
   if (ackerror) {
-    sht_type = 0;
+//    sht_type = 0;
     AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_SHT1 D_SENSOR_DID_NOT_ACK_COMMAND));
   }
   return (!ackerror);
@@ -100,7 +101,7 @@ bool ShtAwaitResult(void)
     delay(20);
   }
   AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_SHT1 D_SENSOR_BUSY));
-  sht_type = 0;
+//  sht_type = 0;
   return false;
 }
 
@@ -158,10 +159,6 @@ bool ShtRead(void)
 
 void ShtDetect(void)
 {
-  if (sht_type) {
-    return;
-  }
-
   sht_sda_pin = pin[GPIO_I2C_SDA];
   sht_scl_pin = pin[GPIO_I2C_SCL];
   if (ShtRead()) {
@@ -175,11 +172,10 @@ void ShtDetect(void)
 
 void ShtEverySecond(void)
 {
-  if (sht_type && !(uptime %4)) {  // Update every 4 seconds
+  if (!(uptime %4)) {  // Every 4 seconds
     // 344mS
     if (!ShtRead()) {
       AddLogMissed(sht_types, sht_valid);
-//      if (!sht_valid) { sht_type = 0; }
     }
   }
 }
@@ -220,14 +216,15 @@ void ShtShow(bool json)
 
 bool Xsns07(uint8_t function)
 {
+  if (!I2cEnabled(XI2C_08)) { return false; }
+
   bool result = false;
 
-  if (i2c_flg) {
+  if (FUNC_INIT == function) {
+    ShtDetect();
+  }
+  else if (sht_type) {
     switch (function) {
-//      case FUNC_PREP_BEFORE_TELEPERIOD:  // As this is not a real I2C device it may interfere with other sensors
-      case FUNC_INIT:                      // Move detection to restart only removing interference
-        ShtDetect();
-        break;
       case FUNC_EVERY_SECOND:
         ShtEverySecond();
         break;

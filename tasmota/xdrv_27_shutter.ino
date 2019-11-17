@@ -174,7 +174,7 @@ void ShutterInit(void)
       // Determine shutter types
       Shutter.mask |= 3 << (Settings.shutter_startrelay[i] -1)  ;
 
-      for (uint32_t j = 0; j < MAX_INTERLOCKS * Settings.flag.interlock; j++) {
+      for (uint32_t j = 0; j < MAX_INTERLOCKS * Settings.flag.interlock; j++) {  // CMND_INTERLOCK - Enable/disable interlock
         //AddLog_P2(LOG_LEVEL_INFO, PSTR("SHT: Interlock state i=%d %d, flag %d, , shuttermask %d, maskedIL %d"),i, Settings.interlock[i], Settings.flag.interlock,Shutter.mask, Settings.interlock[i]&Shutter.mask);
         if (Settings.interlock[j] && Settings.interlock[j] & Shutter.mask) {
           //AddLog_P2(LOG_LEVEL_INFO, PSTR("SHT: Relay in Interlock group"));
@@ -275,7 +275,7 @@ void ShutterUpdatePosition(void)
         snprintf_P(scommand, sizeof(scommand),PSTR(D_SHUTTER "%d"), i+1);
         GetTopic_P(stopic, STAT, mqtt_topic, scommand);
         Response_P("%d", Settings.shutter_invert[i] ? 100 - Settings.shutter_position[i]: Settings.shutter_position[i]);
-        MqttPublish(stopic, Settings.flag.mqtt_power_retain);
+        MqttPublish(stopic, Settings.flag.mqtt_power_retain);  // CMND_POWERRETAIN
 
         switch (Shutter.mode) {
           case SHT_PULSE_OPEN__PULSE_CLOSE:
@@ -316,7 +316,8 @@ bool ShutterState(uint8_t device)
 {
   device--;
   device &= 3;
-  return (Settings.flag3.shutter_mode && (Shutter.mask & (1 << (Settings.shutter_startrelay[device]-1))) );
+  return (Settings.flag3.shutter_mode &&  // SetOption80 - Enable shutter support
+          (Shutter.mask & (1 << (Settings.shutter_startrelay[device]-1))) );
 }
 
 void ShutterStartInit(uint8_t index, uint8_t direction, int32_t target_pos)
@@ -425,6 +426,7 @@ void ShutterSetPosition(uint8_t device, uint8_t position)
 void CmndShutterOpen(void)
 {
   XdrvMailbox.payload = 100;
+  XdrvMailbox.data_len = 3;
   last_source = SRC_WEBGUI;
   CmndShutterPosition();
 }
@@ -432,6 +434,7 @@ void CmndShutterOpen(void)
 void CmndShutterClose(void)
 {
   XdrvMailbox.payload = 0;
+  XdrvMailbox.data_len = 1;
   last_source = SRC_WEBGUI;
   CmndShutterPosition();
 }
@@ -460,12 +463,20 @@ void CmndShutterPosition(void)
   if ((XdrvMailbox.index > 0) && (XdrvMailbox.index <= shutters_present)) {
     uint32_t index = XdrvMailbox.index -1;
     //limit the payload
-    AddLog_P2(LOG_LEVEL_DEBUG, PSTR("SHT: Position in: payload %d, index %d, source %d"), XdrvMailbox.payload , XdrvMailbox.index, last_source );
+    AddLog_P2(LOG_LEVEL_DEBUG, PSTR("SHT: Position in: payload %s (%d), payload %d, index %d, source %d"), XdrvMailbox.data , XdrvMailbox.data_len, XdrvMailbox.payload , XdrvMailbox.index, last_source );
 
+    if (XdrvMailbox.data_len > 1 &&  XdrvMailbox.payload <=0) {
+      UpperCase(XdrvMailbox.data, XdrvMailbox.data);
+      if (!strcmp(XdrvMailbox.data,"UP"))   { CmndShutterOpen(); }
+      if (!strcmp(XdrvMailbox.data,"DOWN")) { CmndShutterClose(); }
+      if (!strcmp(XdrvMailbox.data,"STOP")) { CmndShutterStop(); }
+      return;
+    }
+	  
     int8_t target_pos_percent = XdrvMailbox.payload < 0 ? 0 : (XdrvMailbox.payload > 100 ? 100 : XdrvMailbox.payload);
     // webgui still send also on inverted shutter the native position.
     target_pos_percent = Settings.shutter_invert[index] &&  SRC_WEBGUI != last_source ? 100 - target_pos_percent : target_pos_percent;
-    if (target_pos_percent != -99) {
+    if (XdrvMailbox.payload != -99) {
       //target_pos_percent = Settings.shutter_invert[index] ? 100 - target_pos_percent : target_pos_percent;
       Shutter.target_position[index] = ShutterPercentToRealPosition(target_pos_percent, index);
       //Shutter.target_position[index] = XdrvMailbox.payload < 5 ?  Settings.shuttercoeff[2][index] * XdrvMailbox.payload : Settings.shuttercoeff[1][index] * XdrvMailbox.payload + Settings.shuttercoeff[0,index];
@@ -638,7 +649,7 @@ bool Xdrv27(uint8_t function)
 {
   bool result = false;
 
-  if (Settings.flag3.shutter_mode) {
+  if (Settings.flag3.shutter_mode) {  // SetOption80 - Enable shutter support
     switch (function) {
       case FUNC_PRE_INIT:
         ShutterInit();

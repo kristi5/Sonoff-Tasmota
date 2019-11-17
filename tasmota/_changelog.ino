@@ -1,12 +1,40 @@
 /*********************************************************************************************\
+ * 7.0.0.4 20191108
+ * Add command WifiPower 0 .. 20.5 to set Wifi Output Power which will be default set to 17dBm
+ * Change supported PCF8574 I2C address range to 0x20 - 0x26 allowing other I2C devices with address 0x27 to be used at the same time
+ * Change supported PCF8574A I2C address range to 0x39 - 0x3F allowing other I2C devices with address 0x38 to be used at the same time
+ * Change supported MCP230xx I2C address range to 0x20 - 0x26 allowing other I2C devices with address 0x27 to be used at the same time
+ * Add Keep last channels values when Color command end with '=' (#6799)
+ * Add support for I2C sensor TLS2591 Light Intensity sensor (#6873)
+ * Change Kept only NEC/RC5/RC6/HASH IR protocols in standard Tasmota, all other protocols require Tasmota-IR, saving 4K
+ * Add command SetOption76 0/1 to enable incrementing bootcount when deepsleep is enabled (#6930)
+ * Change Reset erase end address from as seen by SDK (getFlashChipSize) to full flash size (getFlashChipRealSize)
+ * Change Zigbee log verbosity reduction
+ *
+ * 7.0.0.3 20191103
+ * Add command I2cDriver for I2C driver runtime control using document I2CDEVICES.md
+ * Fix random crash caused by UPNP flood
+ * Add support for Honeywell HPMA115S0 particle concentration sensor by David Hunt (#6843)
+ * Remove driver xsns_12_ads1115_i2cdev replaced by xsns_12_ads1115
+ *
+ * 7.0.0.2 20191102
+ * Add command WebColor19 to control color of Module and Name (#6811)
+ * Add support for Honeywell I2C HIH series Humidity and Temperetaure sensor (#6808)
+ * Fix wrong Dimmer behavior introduced with #6799 when SetOption37 < 128
+ * Change add DS18x20 support in Tasmota-IR
+ * Add Zigbee command support, considered as v1.0 for full Zigbee support
+ * Fix Reduce flash size after change to IRremoteESP8266 v2.7.0
+ *
  * 7.0.0.1 20191027
- * Remove references to versions before 6.x
+ * Remove update support for versions before 6.0
  * Change default GUI to dark theme
  * Add command SetOption73 0/1 to re-enable HTTP Cross-Origin Resource Sharing (CORS) now default disabled (#6767)
  * Add frequency to ADE7953 energy monitor as used in Shelly 2.5 by ljakob (#6778)
  * Add command SetOption74 0/1 to enable DS18x20 internal pull-up and remove define DS18B20_INTERNAL_PULLUP (#6795)
  * Fix better control of RGB/White when SetOption37 >128, added Dimmer1 and Dimmer2 commands (#6714)
  * Add hide Alexa objects with friendlyname starting with '$' (#6722, #6762)
+ * Add command SetOption75 0/1 to switch between grouptopic (0) using fulltopic replacing %topic% or (1) is cmnd/<grouptopic> (#6779)
+ * Change Update IRremoteESP8266 to v2.7.0
  *
  * 6.7.1.1 20191026
  * Change ArduinoSlave to TasmotaSlave (Experimental)
@@ -593,7 +621,7 @@
  * Revert sonoff-minimal removals causing failure of wifi connection (#3177)
  *
  * 6.1.0 20180706
- * Remove version 3, 4 and pre 5.2 settings auto-upgrade. See https://github.com/arendst/Tasmota/wiki/Upgrade#migration-path
+ * Remove version 3, 4 and pre 5.2 settings auto-upgrade. See https://github.com/arendst/Tasmota/wiki/Upgrading#migration-path
  * Change default CFG_HOLDER from 0x20161209 to 4617 (=0x1209) - no impact on default upgrades
  * Change number of supported switches from 4 to 8 (#2885, #3086)
  * Change BME680 driver from Adafruit to Bosch BME680 library (#2969)

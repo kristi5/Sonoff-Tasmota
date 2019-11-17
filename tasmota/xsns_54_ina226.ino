@@ -31,15 +31,16 @@
 *    b. Sensor54 12 [full scale current in amperes] e.g. Sensor54 12 3.0
 *    c. Sensor54 2 saves the settings and restarts Tasmota. The device should show up after the system boots again.
 *
+*
+* This driver will not probe I2C bus for INA226 devices unless the full scale current is set for a device number.
+* It will map device numbers as follows:
+*
 * Device number to I2C slave address mapping
 *
 * 1 - 0x40
 * 2 - 0x41
 * 3 - 0x44
 * 4 - 0x45
-*
-* This driver will not probe I2C bus for INA226 devices unless the full scale current is set for a device number.
-* It will map device numbers as follows:
 *
 * To set shunt resistance and full scale current, use the Sensor54 command interface as follows:
 *
@@ -67,6 +68,7 @@
 // Define driver ID
 
 #define XSNS_54                                 54
+#define XI2C_35                                 35  // See I2CDEVICES.md
 
 #define INA226_MAX_ADDRESSES                    4
 #define INA226_ADDRESS1                         (0x40)    // 1000000 (A0+A1=GND)
@@ -123,7 +125,7 @@ static void _debug_fval(const char *str, float fval, uint8_t prec = 4 )
 {
   char fstr[32];
   dtostrfd(fval, prec, fstr);
-  AddLog_P2( LOG_LEVEL_NONE, PSTR("%s: %s"), str, fstr );
+  AddLog_P2( LOG_LEVEL_DEBUG, PSTR("%s: %s"), str, fstr );
 }
 
 
@@ -175,6 +177,19 @@ bool Ina226TestPresence(uint8_t device)
 
 }
 
+void Ina226ResetActive(void)
+{
+  Ina226SlaveInfo_t *p = slaveInfo;
+
+  for (uint32_t i = 0; i < INA226_MAX_ADDRESSES; i++) {
+    p = &slaveInfo[i];
+    // Address
+    uint8_t addr = p->address;
+    if (addr) {
+      I2cResetActive(addr);
+    }
+  }
+}
 
 /*
 * Initialize INA226 devices
@@ -182,20 +197,17 @@ bool Ina226TestPresence(uint8_t device)
 
 void Ina226Init()
 {
-
-
   uint32_t i;
 
   slavesFound = 0;
 
   Ina226SlaveInfo_t *p = slaveInfo;
 
-
   //AddLog_P2( LOG_LEVEL_NONE, "Ina226Init");
-  AddLog_P2( LOG_LEVEL_NONE, "Size of Settings: %d bytes", sizeof(Settings));
+//  AddLog_P2( LOG_LEVEL_NONE, "Size of Settings: %d bytes", sizeof(Settings));
 
-  if (!i2c_flg)
-    AddLog_P2(LOG_LEVEL_DEBUG, "INA226: Initialization failed: No I2C support");
+//  if (!i2c_flg)
+//    AddLog_P2(LOG_LEVEL_DEBUG, "INA226: Initialization failed: No I2C support");
 
 
   // Clear slave info data
@@ -208,8 +220,10 @@ void Ina226Init()
 
   // Detect devices
 
-  for (i = 0; (i < INA226_MAX_ADDRESSES); i++){
+  for (i = 0; i < INA226_MAX_ADDRESSES; i++){
     uint8_t addr = pgm_read_byte(probeAddresses + i);
+
+    if (I2cActive(addr)) { continue; }
 
     // Skip device probing if the full scale current is zero
 
@@ -244,7 +258,6 @@ void Ina226Init()
         continue; // No device
 
     // store data in slave info struct.
-
     p = &slaveInfo[i];
     // Address
     p->address = addr;
@@ -267,9 +280,9 @@ void Ina226Init()
 
     Ina226SetCalibration(i);
 
-    //AddLog_P2( LOG_LEVEL_NONE, S_LOG_I2C_FOUND_AT, Ina226Str, addr );
-    slavesFound++;
+    I2cSetActiveFound(addr, Ina226Str);
 
+    slavesFound++;
   }
 }
 
@@ -398,6 +411,7 @@ bool Ina226CommandSensor()
     // Device-less commands
     switch (p1){
       case 1: // Rerun init
+        Ina226ResetActive();
         Ina226Init();
         Response_P(PSTR("{\"Sensor54-Command-Result\":{\"SlavesFound\":%d}}"),slavesFound);
         break;
@@ -499,7 +513,7 @@ void Ina226Show(bool json)
 
 
     if (json) {
-      ResponseAppend_P(PSTR(",\"%s\":{\"Id\":%02x,\"" D_JSON_VOLTAGE "\":%s,\"" D_JSON_CURRENT "\":%s,\"" D_JSON_POWERUSAGE "\":%s}"),
+      ResponseAppend_P(PSTR(",\"%s\":{\"Id\":%d,\"" D_JSON_VOLTAGE "\":%s,\"" D_JSON_CURRENT "\":%s,\"" D_JSON_POWERUSAGE "\":%s}"),
                        name, i, voltage, current, power);
 #ifdef USE_DOMOTICZ
       if (0 == tele_period) {
@@ -529,37 +543,35 @@ void Ina226Show(bool json)
  * @post    None.
  *
  */
-bool Xsns54(byte callback_id) {
+bool Xsns54(byte callback_id)
+{
+  if (!I2cEnabled(XI2C_35)) { return false; }
 
   // Set return value to `false`
   bool result = false;
 
-  // Check if I2C interface mode is enabled
-  if(i2c_flg) {
-
-    // Check which callback ID is called by Tasmota
-    switch (callback_id) {
-      case FUNC_EVERY_SECOND:
-        Ina226EverySecond();
-        break;
-      case FUNC_INIT:
-        Ina226Init();
-        break;
-      case FUNC_JSON_APPEND:
-        Ina226Show(1);
-        break;
+  // Check which callback ID is called by Tasmota
+  switch (callback_id) {
+    case FUNC_EVERY_SECOND:
+      Ina226EverySecond();
+      break;
+    case FUNC_JSON_APPEND:
+      Ina226Show(1);
+      break;
 #ifdef USE_WEBSERVER
-      case FUNC_WEB_SENSOR:
-        Ina226Show(0);
-        break;
+    case FUNC_WEB_SENSOR:
+      Ina226Show(0);
+      break;
 #endif // USE_WEBSERVER
-      case FUNC_COMMAND_SENSOR:
-        if (XSNS_54 == XdrvMailbox.index) {
-          result = Ina226CommandSensor();
-        }
-        break;
-    }
-  } // if(i2c_flg)
+    case FUNC_COMMAND_SENSOR:
+      if (XSNS_54 == XdrvMailbox.index) {
+        result = Ina226CommandSensor();
+      }
+      break;
+    case FUNC_INIT:
+      Ina226Init();
+      break;
+  }
   // Return boolean result
   return result;
 }

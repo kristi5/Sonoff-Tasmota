@@ -26,6 +26,7 @@
 \*********************************************************************************************/
 
 #define XSNS_10              10
+#define XI2C_11              11  // See I2CDEVICES.md
 
 #define BH1750_ADDR1         0x23
 #define BH1750_ADDR2         0x5C
@@ -55,17 +56,14 @@ bool Bh1750Read(void)
 
 void Bh1750Detect(void)
 {
-  if (bh1750_type) {
-    return;
-  }
-
   for (uint32_t i = 0; i < sizeof(bh1750_addresses); i++) {
     bh1750_address = bh1750_addresses[i];
+    if (I2cActive(bh1750_address)) { continue; }
     Wire.beginTransmission(bh1750_address);
     Wire.write(BH1750_CONTINUOUS_HIGH_RES_MODE);
     if (!Wire.endTransmission()) {
+      I2cSetActiveFound(bh1750_address, bh1750_types);
       bh1750_type = 1;
-      AddLog_P2(LOG_LEVEL_DEBUG, S_LOG_I2C_FOUND_AT, bh1750_types, bh1750_address);
       break;
     }
   }
@@ -73,18 +71,9 @@ void Bh1750Detect(void)
 
 void Bh1750EverySecond(void)
 {
-  if (90 == (uptime %100)) {
-    // 1mS
-    Bh1750Detect();
-  }
-  else {
-    // 1mS
-    if (bh1750_type) {
-      if (!Bh1750Read()) {
-        AddLogMissed(bh1750_types, bh1750_valid);
-//        if (!bh1750_valid) { bh1750_type = 0; }
-      }
-    }
+  // 1mS
+  if (!Bh1750Read()) {
+    AddLogMissed(bh1750_types, bh1750_valid);
   }
 }
 
@@ -112,13 +101,15 @@ void Bh1750Show(bool json)
 
 bool Xsns10(uint8_t function)
 {
+  if (!I2cEnabled(XI2C_11)) { return false; }
+
   bool result = false;
 
-  if (i2c_flg) {
+  if (FUNC_INIT == function) {
+    Bh1750Detect();
+  }
+  else if (bh1750_type) {
     switch (function) {
-      case FUNC_INIT:
-        Bh1750Detect();
-        break;
       case FUNC_EVERY_SECOND:
         Bh1750EverySecond();
         break;

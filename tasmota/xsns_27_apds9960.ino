@@ -37,6 +37,7 @@
 \*********************************************************************************************/
 
 #define XSNS_27             27
+#define XI2C_21             21  // See I2CDEVICES.md
 
 #if defined(USE_SHT) || defined(USE_VEML6070) || defined(USE_TSL2561)
   #warning **** Turned off conflicting drivers SHT and VEML6070 ****
@@ -66,7 +67,7 @@
 
 uint8_t APDS9960addr;
 uint8_t APDS9960type = 0;
-char APDS9960stype[9];
+char APDS9960stype[] = "APDS9960";
 char currentGesture[6];
 uint8_t gesture_mode = 1;
 
@@ -1809,14 +1810,7 @@ void handleGesture(void) {
         snprintf_P(currentGesture, sizeof(currentGesture), PSTR("None"));
       }
     }
-
-    mqtt_data[0] = '\0';
-    if (MqttShowSensor()) {
-      MqttPublishPrefixTopic_P(TELE, PSTR(D_RSLT_SENSOR), Settings.flag.mqtt_sensor_retain);
-#ifdef USE_RULES
-      RulesTeleperiod();  // Allow rule based HA messages
-#endif  // USE_RULES
-    }
+    MqttPublishSensor();
   }
 }
 
@@ -1885,35 +1879,24 @@ void APDS9960_loop(void)
   }
 }
 
-bool APDS9960_detect(void)
+void APDS9960_detect(void)
 {
-  if (APDS9960type) {
-    return true;
-  }
+  if (APDS9960type || I2cActive(APDS9960_I2C_ADDR)) { return; }
 
-  bool success = false;
   APDS9960type = I2cRead8(APDS9960_I2C_ADDR, APDS9960_ID);
-
   if (APDS9960type == APDS9960_CHIPID_1 || APDS9960type == APDS9960_CHIPID_2) {
-    strcpy_P(APDS9960stype, PSTR("APDS9960"));
-    AddLog_P2(LOG_LEVEL_DEBUG, S_LOG_I2C_FOUND_AT, APDS9960stype, APDS9960_I2C_ADDR);
     if (APDS9960_init()) {
-      success = true;
-      AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_DEBUG "APDS9960 initialized"));
+      I2cSetActiveFound(APDS9960_I2C_ADDR, APDS9960stype);
+
       enableProximitySensor();
       enableGestureSensor();
+    } else {
+      APDS9960type = 0;
     }
-  }
-  else {
-    if (APDS9960type == APDS9930_CHIPID_1 || APDS9960type == APDS9930_CHIPID_2) {
-      AddLog_P2(LOG_LEVEL_DEBUG, PSTR("APDS9930 found at address 0x%x, unsupported chip"), APDS9960_I2C_ADDR);
-    }
-    else{
-      AddLog_P2(LOG_LEVEL_DEBUG, PSTR("APDS9960 not found at address 0x%x"), APDS9960_I2C_ADDR);
-    }
+  } else {
+    APDS9960type = 0;
   }
   currentGesture[0] = '\0';
-  return success;
 }
 
 /*********************************************************************************************\
@@ -1922,9 +1905,8 @@ bool APDS9960_detect(void)
 
 void APDS9960_show(bool json)
 {
-  if (!APDS9960type) {
-    return;
-  }
+  if (!APDS9960type) { return; }
+
   if (!gesture_mode && !APDS9960_overload) {
     char red_chr[10];
     char green_chr[10];
@@ -2026,30 +2008,31 @@ bool APDS9960CommandSensor(void)
 
 bool Xsns27(uint8_t function)
 {
+  if (!I2cEnabled(XI2C_21)) { return false; }
+
   bool result = false;
 
-  if (i2c_flg) {
-    if (FUNC_INIT == function) {
-      APDS9960_detect();
-    } else if (APDS9960type) {
-      switch (function) {
-        case FUNC_EVERY_50_MSECOND:
-            APDS9960_loop();
-            break;
-        case FUNC_COMMAND_SENSOR:
-            if (XSNS_27 == XdrvMailbox.index) {
-            result = APDS9960CommandSensor();
-            }
-            break;
-        case FUNC_JSON_APPEND:
-            APDS9960_show(1);
-            break;
-#ifdef USE_WEBSERVER
-        case FUNC_WEB_SENSOR:
-          APDS9960_show(0);
+  if (FUNC_INIT == function) {
+    APDS9960_detect();
+  }
+  else if (APDS9960type) {
+    switch (function) {
+      case FUNC_EVERY_50_MSECOND:
+          APDS9960_loop();
           break;
+      case FUNC_COMMAND_SENSOR:
+          if (XSNS_27 == XdrvMailbox.index) {
+          result = APDS9960CommandSensor();
+          }
+          break;
+      case FUNC_JSON_APPEND:
+          APDS9960_show(1);
+          break;
+#ifdef USE_WEBSERVER
+      case FUNC_WEB_SENSOR:
+        APDS9960_show(0);
+        break;
 #endif  // USE_WEBSERVER
-      }
     }
   }
   return result;

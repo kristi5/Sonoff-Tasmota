@@ -352,7 +352,7 @@ const char HTTP_HEAD_STYLE2[] PROGMEM =
   ".bred:hover{background:#%06x;}"  // COLOR_BUTTON_RESET_HOVER
   ".bgrn{background:#%06x;}"  // COLOR_BUTTON_SAVE
   ".bgrn:hover{background:#%06x;}"  // COLOR_BUTTON_SAVE_HOVER
-  "a{text-decoration:none;}"
+  "a{color:#%06x;text-decoration:none;}"  // COLOR_BUTTON
   ".p{float:left;text-align:left;}"
   ".q{float:right;text-align:right;}";
 const char HTTP_HEAD_STYLE3[] PROGMEM =
@@ -364,7 +364,7 @@ const char HTTP_HEAD_STYLE3[] PROGMEM =
 #ifdef FIRMWARE_MINIMAL
   "<div style='text-align:center;color:#%06x;'><h3>" D_MINIMAL_FIRMWARE_PLEASE_UPGRADE "</h3></div>"  // COLOR_TEXT_WARNING
 #endif
-  "<div style='text-align:center;'><noscript>" D_NOSCRIPT "<br></noscript>"
+  "<div style='text-align:center;color:#%06x;'><noscript>" D_NOSCRIPT "<br></noscript>" // COLOR_TITLE
 #ifdef LANGUAGE_MODULE_NAME
   "<h3>" D_MODULE " %s</h3>"
 #else
@@ -614,10 +614,12 @@ void WifiManagerBegin(bool reset_only)
 {
   // setup AP
   if (!global_state.wifi_down) {
-    WiFi.mode(WIFI_AP_STA);
+//    WiFi.mode(WIFI_AP_STA);
+    WifiSetMode(WIFI_AP_STA);
     AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_WIFI D_WIFIMANAGER_SET_ACCESSPOINT_AND_STATION));
   } else {
-    WiFi.mode(WIFI_AP);
+//    WiFi.mode(WIFI_AP);
+    WifiSetMode(WIFI_AP);
     AddLog_P(LOG_LEVEL_DEBUG, PSTR(D_LOG_WIFI D_WIFIMANAGER_SET_ACCESSPOINT));
   }
 
@@ -669,7 +671,7 @@ bool HttpCheckPriviledgedAccess(bool autorequestauth = true)
 
 void HttpHeaderCors(void)
 {
-  if (Settings.flag3.cors_enabled) {
+  if (Settings.flag3.cors_enabled) {  // SetOption73 - Enable HTTP CORS
     WebServer->sendHeader(F("Access-Control-Allow-Origin"), F("*"));
   }
 }
@@ -818,8 +820,11 @@ void WSContentSendStyle_P(const char* formatP, ...)
   }
   WSContentSend_P(HTTP_HEAD_LAST_SCRIPT);
 
-  WSContentSend_P(HTTP_HEAD_STYLE1, WebColor(COL_FORM), WebColor(COL_INPUT), WebColor(COL_INPUT_TEXT), WebColor(COL_INPUT), WebColor(COL_INPUT_TEXT), WebColor(COL_CONSOLE), WebColor(COL_CONSOLE_TEXT), WebColor(COL_BACKGROUND));
-  WSContentSend_P(HTTP_HEAD_STYLE2, WebColor(COL_BUTTON), WebColor(COL_BUTTON_TEXT), WebColor(COL_BUTTON_HOVER), WebColor(COL_BUTTON_RESET), WebColor(COL_BUTTON_RESET_HOVER), WebColor(COL_BUTTON_SAVE), WebColor(COL_BUTTON_SAVE_HOVER));
+  WSContentSend_P(HTTP_HEAD_STYLE1, WebColor(COL_FORM), WebColor(COL_INPUT), WebColor(COL_INPUT_TEXT), WebColor(COL_INPUT),
+                  WebColor(COL_INPUT_TEXT), WebColor(COL_CONSOLE), WebColor(COL_CONSOLE_TEXT), WebColor(COL_BACKGROUND));
+  WSContentSend_P(HTTP_HEAD_STYLE2, WebColor(COL_BUTTON), WebColor(COL_BUTTON_TEXT), WebColor(COL_BUTTON_HOVER),
+                  WebColor(COL_BUTTON_RESET), WebColor(COL_BUTTON_RESET_HOVER), WebColor(COL_BUTTON_SAVE), WebColor(COL_BUTTON_SAVE_HOVER),
+                  WebColor(COL_BUTTON));
   if (formatP != nullptr) {
     // This uses char strings. Be aware of sending %% if % is needed
     va_list arg;
@@ -832,11 +837,12 @@ void WSContentSendStyle_P(const char* formatP, ...)
 #ifdef FIRMWARE_MINIMAL
     WebColor(COL_TEXT_WARNING),
 #endif
+    WebColor(COL_TITLE),
     ModuleName().c_str(), Settings.friendlyname[0]);
-  if (Settings.flag3.gui_hostname_ip) {
+  if (Settings.flag3.gui_hostname_ip) {                // SetOption53 - Show hostanme and IP address in GUI main menu
     bool lip = (static_cast<uint32_t>(WiFi.localIP()) != 0);
     bool sip = (static_cast<uint32_t>(WiFi.softAPIP()) != 0);
-    WSContentSend_P(PSTR("<h4>%s%s (%s%s%s)</h4>"),    // sonoff.local (192.168.2.12, 192.168.4.1)
+    WSContentSend_P(PSTR("<h4>%s%s (%s%s%s)</h4>"),    // tasmota.local (192.168.2.12, 192.168.4.1)
       my_hostname,
       (Wifi.mdns_begun) ? ".local" : "",
       (lip) ? WiFi.localIP().toString().c_str() : "",
@@ -990,7 +996,7 @@ void HandleRoot(void)
   if (devices_present) {
 #ifdef USE_LIGHT
     if (light_type) {
-      if (!Settings.flag3.pwm_multi_channels) {
+      if (!Settings.flag3.pwm_multi_channels) {  // SetOption68 0 - Enable multi-channels PWM instead of Color PWM
         if ((LST_COLDWARM == (light_type &7)) || (LST_RGBWC == (light_type &7))) {
           // Cold - Warm &t related to lb("t", value) and WebGetArg("t", tmp, sizeof(tmp));
           WSContentSend_P(HTTP_MSG_SLIDER1, F(D_COLDLIGHT), F(D_WARMLIGHT),
@@ -999,7 +1005,7 @@ void HandleRoot(void)
         // Dark - Bright &d related to lb("d", value) and WebGetArg("d", tmp, sizeof(tmp));
         WSContentSend_P(HTTP_MSG_SLIDER1, F(D_DARKLIGHT), F(D_BRIGHTLIGHT),
           1, 100, Settings.light_dimmer, 'd');
-      } else {  // Settings.flag3.pwm_multi_channels
+      } else {  // Settings.flag3.pwm_multi_channels - SetOption68 1 - Enable multi-channels PWM instead of Color PWM
         uint32_t pwm_channels = (light_type & 7) > LST_MAX ? LST_MAX : (light_type & 7);
         for (uint32_t i = 0; i < pwm_channels; i++) {
           snprintf_P(stemp, sizeof(stemp), PSTR("c%d"), i);
@@ -1011,7 +1017,7 @@ void HandleRoot(void)
     }
 #endif
 #ifdef USE_SHUTTER
-    if (Settings.flag3.shutter_mode) {
+    if (Settings.flag3.shutter_mode) {  // SetOption80 - Enable shutter support
       for (uint32_t i = 0; i < shutters_present; i++) {
         WSContentSend_P(HTTP_MSG_SLIDER2, F(D_CLOSE), F(D_OPEN),
           0, 100, Settings.shutter_position[i], 'u', i+1);
@@ -1624,7 +1630,7 @@ void HandleLoggingConfiguration(void)
   char stemp2[32];
   uint8_t dlevel[4] = { LOG_LEVEL_INFO, LOG_LEVEL_INFO, LOG_LEVEL_NONE, LOG_LEVEL_NONE };
   for (uint32_t idx = 0; idx < 4; idx++) {
-    if ((2==idx) && !Settings.flag.mqtt_enabled) { continue; }
+    if ((2==idx) && !Settings.flag.mqtt_enabled) { continue; }  // SetOption3 - Enable MQTT
     uint32_t llevel = (0==idx)?Settings.seriallog_level:(1==idx)?Settings.weblog_level:(2==idx)?Settings.mqttlog_level:Settings.syslog_level;
     WSContentSend_P(PSTR("<p><b>%s</b> (%s)<br><select id='l%d'>"),
       GetTextIndexed(stemp1, sizeof(stemp1), idx, kLoggingOptions),
@@ -1688,7 +1694,7 @@ void HandleOtherConfiguration(void)
   TemplateJson();
   char stemp[strlen(mqtt_data) +1];
   strlcpy(stemp, mqtt_data, sizeof(stemp));  // Get JSON template
-  WSContentSend_P(HTTP_FORM_OTHER, stemp, (USER_MODULE == Settings.module) ? " checked disabled" : "", (Settings.flag.mqtt_enabled) ? " checked" : "");
+  WSContentSend_P(HTTP_FORM_OTHER, stemp, (USER_MODULE == Settings.module) ? " checked disabled" : "", (Settings.flag.mqtt_enabled) ? " checked" : "");  // SetOption3 - Enable MQTT
 
   uint32_t maxfn = (devices_present > MAX_FRIENDLYNAMES) ? MAX_FRIENDLYNAMES : (!devices_present) ? 1 : devices_present;
 #ifdef USE_SONOFF_IFAN
@@ -1737,7 +1743,7 @@ void OtherSaveSettings(void)
 
   WebGetArg("wp", tmp, sizeof(tmp));
   strlcpy(Settings.web_password, (!strlen(tmp)) ? "" : (strchr(tmp,'*')) ? Settings.web_password : tmp, sizeof(Settings.web_password));
-  Settings.flag.mqtt_enabled = WebServer->hasArg("b1");
+  Settings.flag.mqtt_enabled = WebServer->hasArg("b1");  // SetOption3 - Enable MQTT
 #ifdef USE_EMULATION
   WebGetArg("b2", tmp, sizeof(tmp));
   Settings.flag2.emulation = (!strlen(tmp)) ? 0 : atoi(tmp);
@@ -1899,7 +1905,7 @@ void HandleInformation(void)
     WSContentSend_P(PSTR("}1" D_MAC_ADDRESS "}2%s"), WiFi.softAPmacAddress().c_str());
   }
   WSContentSend_P(PSTR("}1}2&nbsp;"));  // Empty line
-  if (Settings.flag.mqtt_enabled) {
+  if (Settings.flag.mqtt_enabled) {  // SetOption3 - Enable MQTT
 #ifdef USE_MQTT_AWS_IOT
     WSContentSend_P(PSTR("}1" D_MQTT_HOST "}2%s%s"), Settings.mqtt_user, Settings.mqtt_host);
     WSContentSend_P(PSTR("}1" D_MQTT_PORT "}2%d"), Settings.mqtt_port);
@@ -1910,9 +1916,10 @@ void HandleInformation(void)
 #endif
     WSContentSend_P(PSTR("}1" D_MQTT_CLIENT "}2%s"), mqtt_client);
     WSContentSend_P(PSTR("}1" D_MQTT_TOPIC "}2%s"), Settings.mqtt_topic);
-    WSContentSend_P(PSTR("}1" D_MQTT_GROUP_TOPIC "}2%s"), Settings.mqtt_grptopic);
+//    WSContentSend_P(PSTR("}1" D_MQTT_GROUP_TOPIC "}2%s"), Settings.mqtt_grptopic);
+    WSContentSend_P(PSTR("}1" D_MQTT_GROUP_TOPIC "}2%s"), GetGroupTopic_P(stopic, ""));
     WSContentSend_P(PSTR("}1" D_MQTT_FULL_TOPIC "}2%s"), GetTopic_P(stopic, CMND, mqtt_topic, ""));
-    WSContentSend_P(PSTR("}1" D_MQTT " " D_FALLBACK_TOPIC "}2%s"), GetFallbackTopic_P(stopic, CMND, ""));
+    WSContentSend_P(PSTR("}1" D_MQTT " " D_FALLBACK_TOPIC "}2%s"), GetFallbackTopic_P(stopic, ""));
   } else {
     WSContentSend_P(PSTR("}1" D_MQTT "}2" D_DISABLED));
   }
@@ -1925,8 +1932,8 @@ void HandleInformation(void)
 #endif // USE_EMULATION
 
 #ifdef USE_DISCOVERY
-  WSContentSend_P(PSTR("}1" D_MDNS_DISCOVERY "}2%s"), (Settings.flag3.mdns_enabled) ? D_ENABLED : D_DISABLED);
-  if (Settings.flag3.mdns_enabled) {
+  WSContentSend_P(PSTR("}1" D_MDNS_DISCOVERY "}2%s"), (Settings.flag3.mdns_enabled) ? D_ENABLED : D_DISABLED);  // SetOption55 - Control mDNS service
+  if (Settings.flag3.mdns_enabled) {  // SetOption55 - Control mDNS service
 #ifdef WEBSERVER_ADVERTISE
     WSContentSend_P(PSTR("}1" D_MDNS_ADVERTISE "}2" D_WEB_SERVER));
 #else
@@ -2037,7 +2044,7 @@ void HandleUploadDone(void)
     }
     WSContentSend_P(error);
     DEBUG_CORE_LOG(PSTR("UPL: %s"), error);
-    stop_flash_rotate = Settings.flag.stop_flash_rotate;
+    stop_flash_rotate = Settings.flag.stop_flash_rotate;  // SetOption12 - Switch between dynamic or fixed slot flash save location
   } else {
     WSContentSend_P(PSTR("%06x'>" D_SUCCESSFUL "</font></b><br>"), WebColor(COL_TEXT_SUCCESS));
     WSContentSend_P(HTTP_MSG_RSTRT);
@@ -2097,7 +2104,9 @@ void HandleUploadLoop(void)
 #ifdef USE_ARILUX_RF
       AriluxRfDisable();  // Prevent restart exception on Arilux Interrupt routine
 #endif  // USE_ARILUX_RF
-      if (Settings.flag.mqtt_enabled) MqttDisconnect();
+      if (Settings.flag.mqtt_enabled) {  // SetOption3 - Enable MQTT
+        MqttDisconnect();
+      }
       uint32_t maxSketchSpace = (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000;
       if (!Update.begin(maxSketchSpace)) {         //start with max available size
 
@@ -2490,10 +2499,10 @@ String UrlEncode(const String& text)
 
 int WebSend(char *buffer)
 {
-  // [sonoff] POWER1 ON                                               --> Sends http://sonoff/cm?cmnd=POWER1 ON
+  // [tasmota] POWER1 ON                                               --> Sends http://tasmota/cm?cmnd=POWER1 ON
   // [192.168.178.86:80,admin:joker] POWER1 ON                        --> Sends http://hostname:80/cm?user=admin&password=joker&cmnd=POWER1 ON
-  // [sonoff] /any/link/starting/with/a/slash.php?log=123             --> Sends http://sonoff/any/link/starting/with/a/slash.php?log=123
-  // [sonoff,admin:joker] /any/link/starting/with/a/slash.php?log=123 --> Sends http://sonoff/any/link/starting/with/a/slash.php?log=123
+  // [tasmota] /any/link/starting/with/a/slash.php?log=123             --> Sends http://tasmota/any/link/starting/with/a/slash.php?log=123
+  // [tasmota,admin:joker] /any/link/starting/with/a/slash.php?log=123 --> Sends http://tasmota/any/link/starting/with/a/slash.php?log=123
 
   char *host;
   char *user;
@@ -2574,10 +2583,10 @@ extern uint8_t tasm_cmd_activ;
 
 bool JsonWebColor(const char* dataBuf)
 {
-  // Default (light)
-  // {"WebColor":["#000000","#ffffff","#f2f2f2","#000000","#ffffff","#000000","#ffffff","#ff0000","#008000","#ffffff","#1fa3ec","#0e70a4","#d43535","#931f1f","#47c266","#5aaf6f","#ffffff","#999999","#000000"]}
-  // Alternative (Dark)
-  // {"webcolor":["#eeeeee","#181818","#4f4f4f","#000000","#dddddd","#008000","#222222","#ff0000","#008000","#ffffff","#1fa3ec","#0e70a4","#d43535","#931f1f","#47c266","#5aaf6f","#ffffff","#999999","#000000"]}
+  // Default (Dark theme)
+  // {"WebColor":["#eaeaea","#252525","#4f4f4f","#000","#ddd","#65c115","#1f1f1f","#ff5661","#008000","#faffff","#1fa3ec","#0e70a4","#d43535","#931f1f","#47c266","#5aaf6f","#faffff","#999","#eaeaea"]}
+  // Default pre v7 (Light theme)
+  // {"WebColor":["#000","#fff","#f2f2f2","#000","#fff","#000","#fff","#f00","#008000","#fff","#1fa3ec","#0e70a4","#d43535","#931f1f","#47c266","#5aaf6f","#fff","#999","#000"]}	  // {"WebColor":["#000000","#ffffff","#f2f2f2","#000000","#ffffff","#000000","#ffffff","#ff0000","#008000","#ffffff","#1fa3ec","#0e70a4","#d43535","#931f1f","#47c266","#5aaf6f","#ffffff","#999999","#000000"]}
 
   char dataBufLc[strlen(dataBuf) +1];
   LowerCase(dataBufLc, dataBuf);

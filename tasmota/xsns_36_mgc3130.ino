@@ -33,6 +33,7 @@
 \*********************************************************************************************/
 
 #define XSNS_36                 36
+#define XI2C_27                 27  // See I2CDEVICES.md
 
 #warning **** MGC3130: It is recommended to disable all unneeded I2C-drivers ****
 
@@ -43,7 +44,7 @@
 
 
 bool MGC3130_type = false;
-char MGC3130stype[8];
+char MGC3130stype[] = "MGC3130";
 
 
 #define MGC3130_SYSTEM_STATUS 0x15
@@ -197,40 +198,30 @@ uint8_t MGC3130autoCal[] = {0x10, 0x00, 0x00, 0xA2, 0x80, 0x00 , 0x00, 0x00, 0x0
 uint8_t MGC3130disableAirwheel[] = {0x10, 0x00, 0x00, 0xA2, 0x90, 0x00 , 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00};
 uint8_t MGC3130enableAirwheel[] = {0x10, 0x00, 0x00, 0xA2, 0x90, 0x00 , 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00};
 
-void MGC3130_triggerTele(){
-    mqtt_data[0] = '\0';
-    if (MqttShowSensor()) {
-      MqttPublishPrefixTopic_P(TELE, PSTR(D_RSLT_SENSOR), Settings.flag.mqtt_sensor_retain);
-    #ifdef USE_RULES
-      RulesTeleperiod();  // Allow rule based HA messages
-    #endif  // USE_RULES
-    }
-}
-
 void MGC3130_handleSensorData(){
       if ( MGC_data.out.outputConfigMask.touchInfo && MGC3130_touchTimeout == 0){
         if (MGC3130_handleTouch()){
             MGC3130_triggeredByTouch = true;
-            MGC3130_triggerTele();
+            MqttPublishSensor();
         }
       }
 
       if(MGC3130_mode == 1){
         if( MGC_data.out.outputConfigMask.gestureInfo && MGC_data.out.gestureInfo.gestureCode > 0){
           MGC3130_handleGesture();
-          MGC3130_triggerTele();
+          MqttPublishSensor();
         }
       }
       if(MGC3130_mode == 2){
         if(MGC_data.out.outputConfigMask.airWheelInfo && MGC_data.out.systemInfo.airWheelValid){
           MGC3130_handleAirWheel();
-          MGC3130_triggerTele();
+          MqttPublishSensor();
         }
       }
       if(MGC3130_mode == 3){
         if(MGC_data.out.systemInfo.positionValid && (MGC_data.out.z > MGC3130_MIN_ZVALUE)){
-          MGC3130_triggerTele();
-          }
+          MqttPublishSensor();
+        }
       }
 }
 
@@ -483,12 +474,9 @@ void MGC3130_loop()
   MGC3130_receiveMessage();
 }
 
-
-bool MGC3130_detect(void)
+void MGC3130_detect(void)
 {
-  if (MGC3130_type){
-    return true;
-  }
+  if (MGC3130_type || I2cActive(MGC3130_I2C_ADDR)) { return; }
 
   pinMode(MGC3130_xfer, INPUT_PULLUP);
   pinMode(MGC3130_reset,  OUTPUT);
@@ -497,17 +485,11 @@ bool MGC3130_detect(void)
   digitalWrite(MGC3130_reset, HIGH);
   delay(50);
 
-  bool success = false;
-  success = MGC3130_receiveMessage(); // This should read the firmware info
-  if (success) {
-    strcpy_P(MGC3130stype, PSTR("MGC3130"));
-    AddLog_P2(LOG_LEVEL_DEBUG, S_LOG_I2C_FOUND_AT, MGC3130stype, MGC3130_I2C_ADDR);
+  if (MGC3130_receiveMessage()) {  // This should read the firmware info
+    I2cSetActiveFound(MGC3130_I2C_ADDR, MGC3130stype);
     MGC3130_currentGesture[0] = '\0';
     MGC3130_type = true;
-  } else {
-    AddLog_P2(LOG_LEVEL_DEBUG, PSTR("MGC3130 did not respond at address 0x%x"), MGC3130_I2C_ADDR);
   }
-  return success;
 }
 
 /*********************************************************************************************\
@@ -602,31 +584,31 @@ bool MGC3130CommandSensor()
 
 bool Xsns36(uint8_t function)
 {
+  if (!I2cEnabled(XI2C_27)) { return false; }
+
   bool result = false;
 
-  if (i2c_flg) {
-    if ((FUNC_INIT == function) && (pin[GPIO_MGC3130_XFER] < 99) && (pin[GPIO_MGC3130_RESET] < 99)) {
-      MGC3130_detect();
-    }
-    else if (MGC3130_type) {
-      switch (function) {
-        case FUNC_EVERY_50_MSECOND:
-          MGC3130_loop();
-          break;
-        case FUNC_COMMAND_SENSOR:
-          if (XSNS_36 == XdrvMailbox.index) {
-            result = MGC3130CommandSensor();
-          }
-          break;
-        case FUNC_JSON_APPEND:
-          MGC3130_show(1);
-          break;
+  if ((FUNC_INIT == function) && (pin[GPIO_MGC3130_XFER] < 99) && (pin[GPIO_MGC3130_RESET] < 99)) {
+    MGC3130_detect();
+  }
+  else if (MGC3130_type) {
+    switch (function) {
+      case FUNC_EVERY_50_MSECOND:
+        MGC3130_loop();
+        break;
+      case FUNC_COMMAND_SENSOR:
+        if (XSNS_36 == XdrvMailbox.index) {
+          result = MGC3130CommandSensor();
+        }
+        break;
+      case FUNC_JSON_APPEND:
+        MGC3130_show(1);
+        break;
 #ifdef USE_WEBSERVER
-        case FUNC_WEB_SENSOR:
-          MGC3130_show(0);
-          break;
+      case FUNC_WEB_SENSOR:
+        MGC3130_show(0);
+        break;
 #endif  // USE_WEBSERVER
-      }
     }
   }
   return result;

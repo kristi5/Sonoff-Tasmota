@@ -87,126 +87,10 @@ bool OsWatchBlockedLoop(void)
 {
   return oswatch_blocked_loop;
 }
+
 /*********************************************************************************************\
  * Miscellaneous
 \*********************************************************************************************/
-
-#ifdef ARDUINO_ESP8266_RELEASE_2_3_0
-// Functions not available in 2.3.0
-
-// http://clc-wiki.net/wiki/C_standard_library:string.h:memchr
-void* memchr(const void* ptr, int value, size_t num)
-{
-  unsigned char *p = (unsigned char*)ptr;
-  while (num--) {
-    if (*p != (unsigned char)value) {
-      p++;
-    } else {
-      return p;
-    }
-  }
-  return 0;
-}
-
-// http://clc-wiki.net/wiki/C_standard_library:string.h:strcspn
-// Get span until any character in string
-size_t strcspn(const char *str1, const char *str2)
-{
-  size_t ret = 0;
-  while (*str1) {
-    if (strchr(str2, *str1)) {  // Slow
-      return ret;
-    } else {
-      str1++;
-      ret++;
-    }
-  }
-  return ret;
-}
-
-// https://clc-wiki.net/wiki/C_standard_library:string.h:strpbrk
-// Locate the first occurrence in the string pointed to by s1 of any character from the string pointed to by s2
-char* strpbrk(const char *s1, const char *s2)
-{
-  while(*s1) {
-    if (strchr(s2, *s1++)) {
-      return (char*)--s1;
-    }
-  }
-  return 0;
-}
-
-// https://opensource.apple.com/source/Libc/Libc-583/stdlib/FreeBSD/strtoull.c
-// Convert a string to an unsigned long long integer
-#ifndef __LONG_LONG_MAX__
-#define __LONG_LONG_MAX__ 9223372036854775807LL
-#endif
-#ifndef ULLONG_MAX
-#define ULLONG_MAX (__LONG_LONG_MAX__ * 2ULL + 1)
-#endif
-
-unsigned long long strtoull(const char *__restrict nptr, char **__restrict endptr, int base)
-{
-  const char *s = nptr;
-  char c;
-  do { c = *s++; } while (isspace((unsigned char)c));                         // Trim leading spaces
-
-  int neg = 0;
-  if (c == '-') {                                                             // Set minus flag and/or skip sign
-    neg = 1;
-    c = *s++;
-  } else {
-    if (c == '+') {
-      c = *s++;
-    }
-  }
-
-  if ((base == 0 || base == 16) && (c == '0') && (*s == 'x' || *s == 'X')) {  // Set Hexadecimal
-    c = s[1];
-    s += 2;
-    base = 16;
-  }
-  if (base == 0) { base = (c == '0') ? 8 : 10; }                              // Set Octal or Decimal
-
-  unsigned long long acc = 0;
-  int any = 0;
-  if (base > 1 && base < 37) {
-    unsigned long long cutoff = ULLONG_MAX / base;
-    int cutlim = ULLONG_MAX % base;
-    for ( ; ; c = *s++) {
-      if (c >= '0' && c <= '9')
-        c -= '0';
-      else if (c >= 'A' && c <= 'Z')
-        c -= 'A' - 10;
-      else if (c >= 'a' && c <= 'z')
-        c -= 'a' - 10;
-      else
-        break;
-
-      if (c >= base)
-        break;
-
-      if (any < 0 || acc > cutoff || (acc == cutoff && c > cutlim))
-        any = -1;
-      else {
-        any = 1;
-        acc *= base;
-        acc += c;
-      }
-    }
-    if (any < 0) {
-      acc = ULLONG_MAX;                                                       // Range error
-    }
-    else if (any && neg) {
-      acc = -acc;
-    }
-  }
-
-  if (endptr != nullptr) { *endptr = (char *)(any ? s - 1 : nptr); }
-
-  return acc;
-}
-#endif  // ARDUINO_ESP8266_RELEASE_2_3_0
 
 // Get span until single character in string
 size_t strchrspn(const char *str1, int character)
@@ -304,7 +188,7 @@ char* ulltoa(unsigned long long value, char *str, int radix)
 }
 
 // see https://stackoverflow.com/questions/6357031/how-do-you-convert-a-byte-array-to-a-hexadecimal-string-in-c
-// char* ToHex_P(unsigned char * in, size_t insz, char * out, size_t outsz, char inbetween = '\0'); in sonoff_post.h
+// char* ToHex_P(unsigned char * in, size_t insz, char * out, size_t outsz, char inbetween = '\0'); in tasmota_post.h
 char* ToHex_P(const unsigned char * in, size_t insz, char * out, size_t outsz, char inbetween)
 {
   // ToHex_P(in, insz, out, outz)      -> "12345667"
@@ -495,7 +379,7 @@ char IndexSeparator()
 
   return separators[Settings.flag3.use_underscore];
 */
-  if (Settings.flag3.use_underscore) {
+  if (Settings.flag3.use_underscore) {  // SetOption64 - Enable "_" instead of "-" as sensor index separator
     return '_';
   } else {
     return '-';
@@ -612,6 +496,20 @@ char* GetPowerDevice(char* dest, uint32_t idx, size_t size)
   return GetPowerDevice(dest, idx, size, 0);
 }
 
+String GetDeviceHardware(void)
+{
+  // esptool.py get_efuses
+  uint32_t efuse1 = *(uint32_t*)(0x3FF00050);
+  uint32_t efuse2 = *(uint32_t*)(0x3FF00054);
+//  uint32_t efuse3 = *(uint32_t*)(0x3FF00058);
+//  uint32_t efuse4 = *(uint32_t*)(0x3FF0005C);
+
+//  AddLog_P2(LOG_LEVEL_DEBUG, PSTR("FUS: efuses 0x%08X 0x%08X, name %s"), efuse1, efuse2);
+
+  bool is_8285 = ( (efuse1 & (1 << 4)) || (efuse2 & (1 << 16)) );
+  return String((is_8285) ? F("ESP8285") : F("ESP8266EX"));
+}
+
 float ConvertTemp(float c)
 {
   float result = c;
@@ -619,8 +517,8 @@ float ConvertTemp(float c)
   global_update = uptime;
   global_temperature = c;
 
-  if (!isnan(c) && Settings.flag.temperature_conversion) {
-    result = c * 1.8 + 32;  // Fahrenheit
+  if (!isnan(c) && Settings.flag.temperature_conversion) {    // SetOption8 - Switch between Celsius or Fahrenheit
+    result = c * 1.8 + 32;                                    // Fahrenheit
   }
   return result;
 }
@@ -629,15 +527,15 @@ float ConvertTempToCelsius(float c)
 {
   float result = c;
 
-  if (!isnan(c) && Settings.flag.temperature_conversion) {
-    result = (c - 32) / 1.8;  // Celsius
+  if (!isnan(c) && Settings.flag.temperature_conversion) {    // SetOption8 - Switch between Celsius or Fahrenheit
+    result = (c - 32) / 1.8;                                  // Celsius
   }
   return result;
 }
 
 char TempUnit(void)
 {
-  return (Settings.flag.temperature_conversion) ? 'F' : 'C';
+  return (Settings.flag.temperature_conversion) ? 'F' : 'C';  // SetOption8  - Switch between Celsius or Fahrenheit
 }
 
 float ConvertHumidity(float h)
@@ -655,8 +553,8 @@ float ConvertPressure(float p)
   global_update = uptime;
   global_pressure = p;
 
-  if (!isnan(p) && Settings.flag.pressure_conversion) {
-    result = p * 0.75006375541921;  // mmHg
+  if (!isnan(p) && Settings.flag.pressure_conversion) {  // SetOption24 - Switch between hPa or mmHg pressure unit
+    result = p * 0.75006375541921;                       // mmHg
   }
   return result;
 }
@@ -883,7 +781,22 @@ void WebHexCode(uint32_t i, const char* code)
     color = w | (w << 4);                                                            // 00112233
   }
 */
-
+  uint32_t j = sizeof(Settings.web_color) / 3;          // First area contains j = 18 colors
+/*
+  if (i < j) {
+    Settings.web_color[i][0] = (color >> 16) & 0xFF;  // Red
+    Settings.web_color[i][1] = (color >> 8) & 0xFF;   // Green
+    Settings.web_color[i][2] = color & 0xFF;          // Blue
+  } else {
+    Settings.web_color2[i-j][0] = (color >> 16) & 0xFF;  // Red
+    Settings.web_color2[i-j][1] = (color >> 8) & 0xFF;   // Green
+    Settings.web_color2[i-j][2] = color & 0xFF;          // Blue
+  }
+*/
+  if (i >= j) {
+    // Calculate i to index in Settings.web_color2 - Dirty(!) but saves 128 bytes code
+    i += ((((uint8_t*)&Settings.web_color2 - (uint8_t*)&Settings.web_color) / 3) - j);
+  }
   Settings.web_color[i][0] = (color >> 16) & 0xFF;  // Red
   Settings.web_color[i][1] = (color >> 8) & 0xFF;   // Green
   Settings.web_color[i][2] = color & 0xFF;          // Blue
@@ -891,7 +804,17 @@ void WebHexCode(uint32_t i, const char* code)
 
 uint32_t WebColor(uint32_t i)
 {
+  uint32_t j = sizeof(Settings.web_color) / 3;          // First area contains j = 18 colors
+/*
+  uint32_t tcolor = (i<j)? (Settings.web_color[i][0] << 16) | (Settings.web_color[i][1] << 8) | Settings.web_color[i][2] :
+                           (Settings.web_color2[i-j][0] << 16) | (Settings.web_color2[i-j][1] << 8) | Settings.web_color2[i-j][2];
+*/
+  if (i >= j) {
+    // Calculate i to index in Settings.web_color2 - Dirty(!) but saves 128 bytes code
+    i += ((((uint8_t*)&Settings.web_color2 - (uint8_t*)&Settings.web_color) / 3) - j);
+  }
   uint32_t tcolor = (Settings.web_color[i][0] << 16) | (Settings.web_color[i][1] << 8) | Settings.web_color[i][2];
+
   return tcolor;
 }
 
@@ -1077,7 +1000,7 @@ uint8_t ValidPin(uint32_t pin, uint32_t gpio)
   if (FlashPin(pin)) {
     result = GPIO_NONE;  // Disable flash pins GPIO6, GPIO7, GPIO8 and GPIO11
   }
-  if ((WEMOS == Settings.module) && (!Settings.flag3.user_esp8285_enable)) {
+  if ((WEMOS == Settings.module) && (!Settings.flag3.user_esp8285_enable)) {  // SetOption51 - Enable ESP8285 user GPIO's
     if ((pin == 9) || (pin == 10)) { result = GPIO_NONE; }  // Disable possible flash GPIO9 and GPIO10
   }
   return result;
@@ -1461,6 +1384,17 @@ void I2cScan(char *devs, unsigned int devs_len)
   }
 }
 
+void I2cResetActive(uint32_t addr, uint32_t count = 1)
+{
+  addr &= 0x7F;         // Max I2C address is 127
+  count &= 0x7F;        // Max 4 x 32 bits available
+  while (count-- && (addr < 128)) {
+    i2c_active[addr / 32] &= ~(1 << (addr % 32));
+    addr++;
+  }
+//  AddLog_P2(LOG_LEVEL_DEBUG, PSTR("I2C: Active %08X,%08X,%08X,%08X"), i2c_active[0], i2c_active[1], i2c_active[2], i2c_active[3]);
+}
+
 void I2cSetActive(uint32_t addr, uint32_t count = 1)
 {
   addr &= 0x7F;         // Max I2C address is 127
@@ -1472,6 +1406,12 @@ void I2cSetActive(uint32_t addr, uint32_t count = 1)
 //  AddLog_P2(LOG_LEVEL_DEBUG, PSTR("I2C: Active %08X,%08X,%08X,%08X"), i2c_active[0], i2c_active[1], i2c_active[2], i2c_active[3]);
 }
 
+void I2cSetActiveFound(uint32_t addr, const char *types)
+{
+  I2cSetActive(addr);
+  AddLog_P2(LOG_LEVEL_INFO, S_LOG_I2C_FOUND_AT, types, addr);
+}
+
 bool I2cActive(uint32_t addr)
 {
   addr &= 0x7F;         // Max I2C address is 127
@@ -1481,14 +1421,18 @@ bool I2cActive(uint32_t addr)
   return false;
 }
 
-bool I2cDevice(uint8_t addr)
+bool I2cSetDevice(uint32_t addr)
 {
   addr &= 0x7F;         // Max I2C address is 127
   if (I2cActive(addr)) {
     return false;       // If already active report as not present;
   }
-  Wire.beginTransmission(addr);
-  return (0 == Wire.endTransmission());
+  Wire.beginTransmission((uint8_t)addr);
+  bool result = (0 == Wire.endTransmission());
+  if (result) {
+    I2cSetActive(addr, 1);
+  }
+  return result;
 }
 #endif  // USE_I2C
 

@@ -193,7 +193,7 @@
 
 #define D_LOG_SOME_SETTINGS_RESET "Some settings have been reset"
 
-// Commands sonoff.ino
+// Commands tasmota.ino
 #define D_CMND_BACKLOG "Backlog"
 #define D_CMND_DELAY "Delay"
 #define D_CMND_STATUS "Status"
@@ -279,7 +279,9 @@
 #define D_CMND_LEDPOWER "LedPower"
 #define D_CMND_LEDSTATE "LedState"
 #define D_CMND_LEDMASK "LedMask"
+#define D_CMND_WIFIPOWER "WifiPower"
 #define D_CMND_I2CSCAN "I2CScan"
+#define D_CMND_I2CDRIVER "I2CDriver"
 #define D_CMND_SERIALSEND "SerialSend"
 #define D_CMND_SERIALDELIMITER "SerialDelimiter"
 #define D_CMND_BAUDRATE "Baudrate"
@@ -456,24 +458,25 @@
 #define D_JSON_TUYA_MCU_RECEIVED "TuyaReceived"
 
 // Commands xdrv_23_zigbee.ino
+#define D_ZIGBEE_NOT_STARTED "Zigbee not started (yet)"
 #define D_CMND_ZIGBEE_PERMITJOIN "ZigbeePermitJoin"
 #define D_CMND_ZIGBEE_STATUS "ZigbeeStatus"
 #define D_CMND_ZIGBEE_RESET "ZigbeeReset"
   #define D_JSON_ZIGBEE_CC2530 "CC2530"
 #define D_CMND_ZIGBEEZNPSEND "ZigbeeZNPSend"
-  #define D_JSON_ZIGBEE_STATUS "ZigbeeStatus"
+  #define D_JSON_ZIGBEE_STATE "ZigbeeState"
   #define D_JSON_ZIGBEEZNPRECEIVED "ZigbeeZNPReceived"
   #define D_JSON_ZIGBEEZNPSENT "ZigbeeZNPSent"
   #define D_JSON_ZIGBEEZCL_RECEIVED "ZigbeeZCLReceived"
   #define D_JSON_ZIGBEEZCL_RAW_RECEIVED "ZigbeeZCLRawReceived"
   #define D_JSON_ZIGBEE_DEVICE "Device"
   #define D_JSON_ZIGBEE_NAME "Name"
-#define D_CMND_ZIGBEE_ZCL_SEND "ZigbeeZCLSend"
-  #define D_JSON_ZIGBEE_ZCL_SENT "ZigbeeZCLSent"
 #define D_CMND_ZIGBEE_PROBE "ZigbeeProbe"
 #define D_CMND_ZIGBEE_RECEIVED "ZigbeeReceived"
   #define D_CMND_ZIGBEE_LINKQUALITY "LinkQuality"
 #define D_CMND_ZIGBEE_READ "ZigbeeRead"
+#define D_CMND_ZIGBEE_SEND "ZigbeeSend"
+  #define D_JSON_ZIGBEE_ZCL_SENT "ZigbeeZCLSent"
 
   // Commands xdrv_25_A4988_Stepper.ino
   #ifdef USE_A4988_STEPPER
@@ -485,6 +488,36 @@
     #define D_JSON_MOTOR_RPM "setRPM"
     #define D_JSON_MOTOR_MIS "setMIS"
   #endif
+
+/********************************************************************************************/
+
+// Log message prefix
+#define D_LOG_APPLICATION "APP: "  // Application
+#define D_LOG_BRIDGE "BRG: "       // Bridge
+#define D_LOG_CONFIG "CFG: "       // Settings
+#define D_LOG_COMMAND "CMD: "      // Command
+#define D_LOG_DEBUG "DBG: "        // Debug
+#define D_LOG_DHT "DHT: "          // DHT sensor
+#define D_LOG_DOMOTICZ "DOM: "     // Domoticz
+#define D_LOG_DSB "DSB: "          // DS18xB20 sensor
+#define D_LOG_HTTP "HTP: "         // HTTP webserver
+#define D_LOG_HRE "HRE: "
+#define D_LOG_I2C "I2C: "          // I2C
+#define D_LOG_IRR "IRR: "          // Infra Red Received
+#define D_LOG_KNX "KNX: "
+#define D_LOG_LOG "LOG: "          // Logging
+#define D_LOG_MODULE "MOD: "       // Module
+#define D_LOG_MDNS "DNS: "         // mDNS
+#define D_LOG_MQTT "MQT: "         // MQTT
+#define D_LOG_OTHER "OTH: "        // Other
+#define D_LOG_RESULT "RSL: "       // Result
+#define D_LOG_RFR "RFR: "          // RF Received
+#define D_LOG_SERIAL "SER: "       // Serial
+#define D_LOG_SHT1 "SHT: "         // SHT1x sensor
+#define D_LOG_UPLOAD "UPL: "       // Upload
+#define D_LOG_UPNP "UPP: "         // UPnP
+#define D_LOG_WIFI "WIF: "         // Wifi
+#define D_LOG_ZIGBEE "ZIG: "       // Zigbee
 
 /********************************************************************************************/
 
